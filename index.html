@@ -1078,10 +1078,9 @@ let   syncStatus     = 'idle';
 
 // ── Supabase 설정 ───────────────────────────
 function getSbConfig() {
-  return {
-    url: localStorage.getItem(SB_URL_KEY) || SB_DEFAULT_URL,
-    key: localStorage.getItem(SB_KEY_KEY) || SB_DEFAULT_KEY,
-  };
+  const url = localStorage.getItem('times_crm_sb_url') || 'https://dostpddzdxkbjxuozkdm.supabase.co';
+  const key = localStorage.getItem('times_crm_sb_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvc3RwZGR6ZHhrYmp4dW96a2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTQ1NzksImV4cCI6MjA5Mjg5MDU3OX0.7shs6xUefTRJrnQr50Lw8ciLH22EYmX1LqZvTTaQbPs';
+  return { url, key };
 }
 function hasSbConfig() {
   const { url, key } = getSbConfig();

@@ -688,7 +688,13 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 const AUTH_KEY    = 'times_crm_auth';
 const SESSION_KEY = 'times_crm_sess';
 const PERSIST_KEY = 'times_crm_persist';
-const SB_SESS_KEY = 'times_crm_sb_sess'; // sessionStorage용 해시 캐시
+const SB_SESS_KEY = 'times_crm_sb_sess';
+// Supabase 상수 — initAuth보다 먼저 선언 필수
+const SB_URL_KEY    = 'times_crm_sb_url';
+const SB_KEY_KEY    = 'times_crm_sb_key';
+const SB_ROW_ID     = 1;
+const SB_DEFAULT_URL = 'https://dostpddzdxkbjxuozkdm.supabase.co';
+const SB_DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvc3RwZGR6ZHhrYmp4dW96a2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTQ1NzksImV4cCI6MjA5Mjg5MDU3OX0.7shs6xUefTRJrnQr50Lw8ciLH22EYmX1LqZvTTaQbPs';
 
 async function sha256(str) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
@@ -1064,11 +1070,7 @@ const BACKUP_DATE  = 'times_crm_backup_date';
 const CHANGE_CNT   = 'times_crm_changes';
 const AUTO_EVERY   = 15;
 const INTERVAL_KEY = 'times_crm_interval';
-const SB_URL_KEY   = 'times_crm_sb_url';
-const SB_KEY_KEY   = 'times_crm_sb_key';
-const SB_ROW_ID    = 1;
-const SB_DEFAULT_URL = 'https://dostpddzdxkbjxuozkdm.supabase.co';
-const SB_DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvc3RwZGR6ZHhrYmp4dW96a2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTQ1NzksImV4cCI6MjA5Mjg5MDU3OX0.7shs6xUefTRJrnQr50Lw8ciLH22EYmX1LqZvTTaQbPs';
+// SB_URL_KEY 등은 스크립트 상단에 이미 선언됨
 let   autoSaveTimer  = null;
 let   countdownTimer = null;
 let   nextSaveIn     = 0;

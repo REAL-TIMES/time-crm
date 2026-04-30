@@ -1000,67 +1000,6 @@ async function submitChangePw() {
 // ────────────────────────────────────────
 //  초기 진입: 로그인 화면 설정
 // ────────────────────────────────────────
-(function initAuth() {
-  if (isLoggedIn()) { enterApp(); return; }
-
-  const loginTitle   = document.getElementById('login-title');
-  const fieldConfirm = document.getElementById('field-confirm');
-  const loginBtn     = document.getElementById('login-btn');
-  const pwLabel      = document.getElementById('pw-label');
-  const rememberWrap = document.getElementById('remember-wrap');
-
-  const cached = getStoredHash();
-
-  if (cached) {
-    // 캐시가 있으면 즉시 로그인 폼 표시 — 네트워크 기다리지 않음
-    loginTitle.textContent = '비밀번호를 입력하세요';
-    fieldConfirm.style.display = 'none';
-    loginBtn.textContent = '로그인';
-    pwLabel.textContent = '비밀번호';
-    rememberWrap.style.display = '';
-    return;
-  }
-
-  // 캐시 없을 때 — 즉시 로그인 폼 표시 + 백그라운드로 cloud 확인
-  loginTitle.textContent = '비밀번호를 입력하세요';
-  pwLabel.textContent = '비밀번호';
-  fieldConfirm.style.display = 'none';
-  rememberWrap.style.display = '';
-  loginBtn.textContent = '로그인';
-
-  // 백그라운드에서 클라우드 확인 (AbortController로 3초 타임아웃)
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 3000);
-  if (hasSbConfig()) {
-    const { url, key } = getSbConfig();
-    fetch(`${url}/rest/v1/crm_data?id=eq.${SB_ROW_ID}&select=pw_hash`, {
-      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-      signal: ctrl.signal,
-    }).then(r => r.json()).then(rows => {
-      clearTimeout(tid);
-      if (rows && rows[0] && rows[0].pw_hash) {
-        storeAuthHash(rows[0].pw_hash);
-        // 폼은 이미 보이고 있음 — 추가 업데이트 불필요
-      } else {
-        // 클라우드에도 없음 → 설정 화면으로 전환
-        loginTitle.textContent = '🔐 비밀번호를 설정해주세요';
-        fieldConfirm.style.display = 'block';
-        loginBtn.textContent = '비밀번호 설정하기';
-        pwLabel.textContent = '새 비밀번호 (4자 이상)';
-        rememberWrap.style.display = 'none';
-      }
-    }).catch(() => {
-      clearTimeout(tid);
-      // 네트워크 오류 → 설정 화면 표시
-      loginTitle.textContent = '🔐 비밀번호를 설정해주세요';
-      fieldConfirm.style.display = 'block';
-      loginBtn.textContent = '비밀번호 설정하기';
-      pwLabel.textContent = '새 비밀번호 (4자 이상)';
-      rememberWrap.style.display = 'none';
-    });
-  }
-})();
-
 // ════════════════════════════════════════
 //  CRM 시스템
 // ════════════════════════════════════════
@@ -2764,6 +2703,67 @@ function render() {
 
   app.innerHTML = html;
 }
+(function initAuth() {
+  if (isLoggedIn()) { enterApp(); return; }
+
+  const loginTitle   = document.getElementById('login-title');
+  const fieldConfirm = document.getElementById('field-confirm');
+  const loginBtn     = document.getElementById('login-btn');
+  const pwLabel      = document.getElementById('pw-label');
+  const rememberWrap = document.getElementById('remember-wrap');
+
+  const cached = getStoredHash();
+
+  if (cached) {
+    // 캐시가 있으면 즉시 로그인 폼 표시 — 네트워크 기다리지 않음
+    loginTitle.textContent = '비밀번호를 입력하세요';
+    fieldConfirm.style.display = 'none';
+    loginBtn.textContent = '로그인';
+    pwLabel.textContent = '비밀번호';
+    rememberWrap.style.display = '';
+    return;
+  }
+
+  // 캐시 없을 때 — 즉시 로그인 폼 표시 + 백그라운드로 cloud 확인
+  loginTitle.textContent = '비밀번호를 입력하세요';
+  pwLabel.textContent = '비밀번호';
+  fieldConfirm.style.display = 'none';
+  rememberWrap.style.display = '';
+  loginBtn.textContent = '로그인';
+
+  // 백그라운드에서 클라우드 확인 (AbortController로 3초 타임아웃)
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 3000);
+  if (hasSbConfig()) {
+    const { url, key } = getSbConfig();
+    fetch(`${url}/rest/v1/crm_data?id=eq.${SB_ROW_ID}&select=pw_hash`, {
+      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+      signal: ctrl.signal,
+    }).then(r => r.json()).then(rows => {
+      clearTimeout(tid);
+      if (rows && rows[0] && rows[0].pw_hash) {
+        storeAuthHash(rows[0].pw_hash);
+        // 폼은 이미 보이고 있음 — 추가 업데이트 불필요
+      } else {
+        // 클라우드에도 없음 → 설정 화면으로 전환
+        loginTitle.textContent = '🔐 비밀번호를 설정해주세요';
+        fieldConfirm.style.display = 'block';
+        loginBtn.textContent = '비밀번호 설정하기';
+        pwLabel.textContent = '새 비밀번호 (4자 이상)';
+        rememberWrap.style.display = 'none';
+      }
+    }).catch(() => {
+      clearTimeout(tid);
+      // 네트워크 오류 → 설정 화면 표시
+      loginTitle.textContent = '🔐 비밀번호를 설정해주세요';
+      fieldConfirm.style.display = 'block';
+      loginBtn.textContent = '비밀번호 설정하기';
+      pwLabel.textContent = '새 비밀번호 (4자 이상)';
+      rememberWrap.style.display = 'none';
+    });
+  }
+})();
+
 </script>
 </body>
 </html>

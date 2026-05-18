@@ -252,6 +252,7 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 .card-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .card-name { font-size: 15px; font-weight: 600; }
 .card-phone { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.card-phone a:hover { color: var(--blue) !important; text-decoration: underline !important; }
 .card-interest { font-size: 12px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card-meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .meta-item { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 3px; }
@@ -2022,7 +2023,7 @@ function render() {
               <span class="tag ${TYPE_CLASS[c.type]||''}">${TYPE_LABEL[c.type]||c.type}</span>
               <span class="status-badge ${STATUS_CLASS[cStatus]||'status-received'}">${STATUS_ICON[cStatus]||''} ${STATUS_LABEL[cStatus]||cStatus}</span>
             </div>
-            <div class="card-phone">${c.phone}</div>
+            <div class="card-phone"><a href="tel:${c.phone}" onclick="event.stopPropagation()" style="color:var(--text2);text-decoration:none;">${c.phone}</a></div>
             <div class="card-interest">${c.interest||'관심 매물 미등록'}</div>
             ${c.propMain?`<div style="margin-top:4px"><span class="prop-badge">${propMainIcon(c.propMain)} ${propMainLabel(c.propMain)}${c.propSub?' · '+c.propSub:''}</span></div>`:''}
             ${c.contract&&c.contract.contractDate?`<div class="contract-mini"><div class="contract-mini-title">📝 계약</div><div class="contract-mini-info">${c.contract.propBuilding||'매물정보'} ${c.contract.propDealType||''} ${c.contract.propPrice?'· '+fmtMoney(c.contract.propPrice):''}</div><div class="contract-mini-date">계약일 ${fmtDateFull(c.contract.contractDate)}</div></div>`:''}

@@ -1208,12 +1208,15 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
+const APP_VERSION = 'v2.5.1';
+
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
   {key:'apt',        label:'아파트',         icon:'🏢'},
   {key:'officetel',  label:'오피스텔',        icon:'🏬'},
   {key:'villa',      label:'빌라/연립',       icon:'🏘️'},
   {key:'house',      label:'단독/다가구',     icon:'🏠'},
+  {key:'building',   label:'건물',           icon:'🏗️'},
   {key:'commercial', label:'상가/업무',       icon:'🏪'},
   {key:'land',       label:'토지',           icon:'🌿'},
   {key:'rebuild',    label:'재건축/재개발',   icon:'🔨'},
@@ -1223,6 +1226,7 @@ const PROP_SUB = {
   officetel:  ['주거용 오피스텔','업무용 오피스텔'],
   villa:      ['빌라','연립주택','다세대주택'],
   house:      ['단독주택','다가구주택','전원주택'],
+  building:   ['점포주택','소형근생','업무시설','상가건물','복합건물'],
   commercial: ['근린상가','집합상가','오피스','공장/창고'],
   land:       ['대지','농지','임야','잡종지'],
   rebuild:    ['재건축','재개발','지역주택조합'],
@@ -1845,6 +1849,7 @@ function render() {
     <div class="header-actions">
       <span id="sync-status" style="font-size:15px;cursor:pointer;" onclick="hasSbConfig()?cloudSync('수동'):openSbModal()" title="동기화">☁️</span>
       <span id="backup-status" style="font-size:10px;color:rgba(255,255,255,0.35);white-space:nowrap;"></span>
+      <span style="font-size:10px;color:rgba(255,255,255,0.2);padding:0 4px;">${APP_VERSION}</span>
       <button class="btn btn-ghost" onclick="openSbModal()">⚙️</button>
       <button class="btn btn-ghost" onclick="exportData()">💾</button>
       <label class="btn btn-ghost" style="cursor:pointer">📂<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>

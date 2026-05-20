@@ -1173,7 +1173,7 @@ function setIntervalMins(mins) {
 }
 const STAGES = ['시세 탐색', '진지 검토', '결정 임박', '계약 완료'];
 const STAGE_CLASS = ['stage-0','stage-1','stage-2','stage-3'];
-const TOPICS = ['실거래가 공유','시장 분위기','경쟁 매물 현황','세금/대출 정보','매수자 문의 현황','신규 매물 안내','재건축 현황','기타'];
+const TOPICS = ['매물안내','고객반응','세금상담','대출상담','수신거절','기타'];
 const TYPE_LABEL = {
   buyer:'매수', seller:'매도', tenant:'임차', landlord:'임대', potential:'잠재의뢰',
   partner_agency:'협력 부동산', partner_dev:'분양대행사', partner_build:'시행·시공사', partner_finance:'금융·법무',
@@ -2221,17 +2221,21 @@ function render() {
         ${logs.map((l,i) => {
           if (state.editingLogId === i) {
             return `<div class="log-entry" style="border:1px solid var(--gold);background:var(--bg3)">
-              <textarea class="form-input" style="height:64px;margin-bottom:6px" oninput="state.editingLogText=this.value">${state.editingLogText}</textarea>
-              <div style="display:flex;gap:5px"><button class="btn btn-sm btn-primary" onclick="saveEditLog('${sel.id}',${i})">저장</button><button class="btn btn-sm" onclick="state.editingLogId=null;render()">취소</button></div>
+              <textarea class="form-input" id="edit-log-textarea" style="height:64px;margin-bottom:6px" onblur="state.editingLogText=this.value">${(state.editingLogText||'').replace(/`/g,'\\`')}</textarea>
+              <div style="display:flex;gap:5px">
+                <button class="btn btn-sm btn-primary" onclick="state.editingLogText=document.getElementById('edit-log-textarea').value;saveEditLog('${sel.id}',${i})">저장</button>
+                <button class="btn btn-sm" onclick="state.editingLogId=null;render()">취소</button>
+              </div>
             </div>`;
           }
+          const escapedText = (l.text||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
           return `<div class="log-entry">
             <div class="log-date">${fmtDateFull(l.date)}</div>
             <div class="log-text">${l.text}</div>
             ${l.topic?`<span class="log-topic">${l.topic}</span>`:''}
             <div style="display:flex;gap:4px;margin-top:5px">
-              <button class="btn btn-sm" onclick="startEditLog(${i},${JSON.stringify(l.text)})">✏️</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteLog('${sel.id}',${i})">🗑</button>
+              <button class="btn btn-sm" onclick="state.editingLogId=${i};state.editingLogText='${escapedText}';render()">✏️ 수정</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteLog('${sel.id}',${i})">🗑 삭제</button>
             </div>
           </div>`;
         }).join('')}`;

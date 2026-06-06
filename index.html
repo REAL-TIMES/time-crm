@@ -573,6 +573,33 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 /* Supabase 설정 모달 */
 #sb-modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998;display:none;align-items:center;justify-content:center;padding:20px;}
 #sb-modal.show{display:flex;}
+/* ── ⚡ 빠른 고객 추가 (모바일 우선) ── */
+#qa-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
+#qa-modal.show{display:flex;}
+@media(min-width:600px){#qa-modal{align-items:center;padding:20px;}}
+.qa-box{background:#fff;width:100%;max-width:460px;max-height:94vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px 26px;-webkit-overflow-scrolling:touch;}
+@media(min-width:600px){.qa-box{border-radius:18px;}}
+.qa-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.qa-title{font-size:18px;font-weight:800;color:#13294B;}
+.qa-x{background:none;border:none;font-size:20px;color:#9aa3b2;cursor:pointer;padding:4px 8px;}
+.qa-row{margin-bottom:13px;}
+.qa-label{font-size:13px;font-weight:700;color:#56607a;margin-bottom:6px;display:block;}
+.qa-input{width:100%;padding:13px 14px;border:1.5px solid #e2e5ec;border-radius:12px;font-size:16px;font-family:inherit;color:#222a35;background:#fff;}
+.qa-input:focus{outline:none;border-color:#C9A24B;background:#fffdf8;}
+.qa-input.area{min-height:64px;resize:vertical;line-height:1.5;}
+.qa-seg{display:flex;gap:8px;}
+.qa-seg button{flex:1;padding:14px 0;border:1.5px solid #e2e5ec;background:#fff;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;color:#56607a;font-family:inherit;}
+.qa-seg button.on{background:#13294B;color:#fff;border-color:#13294B;}
+.qa-two{display:flex;gap:10px;}
+.qa-two>div{flex:1;}
+.qa-unit{position:relative;}
+.qa-unit .u{position:absolute;right:13px;top:50%;transform:translateY(-50%);color:#9aa3b2;font-size:14px;pointer-events:none;}
+.qa-chips{display:flex;gap:7px;flex-wrap:wrap;}
+.qa-chips button{padding:9px 15px;border:1.5px solid #e2e5ec;background:#fff;border-radius:22px;font-size:14px;cursor:pointer;color:#56607a;font-family:inherit;}
+.qa-chips button.on{background:#C9A24B;color:#fff;border-color:#C9A24B;}
+.qa-mic{width:100%;padding:11px;border:1.5px dashed #C9A24B;background:#fffaf0;border-radius:12px;font-size:14px;font-weight:700;color:#a9801f;cursor:pointer;margin-bottom:8px;font-family:inherit;}
+.qa-save{width:100%;padding:16px;background:#13294B;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:800;cursor:pointer;margin-top:6px;font-family:inherit;}
+.qa-save:active{transform:scale(.99);}
 .sb-modal-box{background:var(--bg2);border-radius:var(--radius);padding:28px 24px;width:100%;max-width:420px;box-shadow:var(--shadow-lg);}
 .sb-modal-title{font-size:16px;font-weight:700;margin-bottom:6px;}
 .sb-modal-desc{font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.7;}
@@ -677,6 +704,59 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
       <button class="btn" onclick="closePwModal()">취소</button>
       <button class="btn btn-primary" onclick="submitChangePw()">변경하기</button>
     </div>
+  </div>
+</div>
+<div id="qa-modal">
+  <div class="qa-box">
+    <div class="qa-head">
+      <div class="qa-title">⚡ 빠른 고객 추가</div>
+      <button class="qa-x" onclick="closeQuickAdd()">✕</button>
+    </div>
+    <div class="qa-row">
+      <label class="qa-label">이름</label>
+      <input class="qa-input" id="qa-name" placeholder="고객 이름" autocomplete="off">
+    </div>
+    <div class="qa-row">
+      <label class="qa-label">연락처</label>
+      <input class="qa-input" id="qa-phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" oninput="this.value=formatPhone(this.value)">
+    </div>
+    <div class="qa-row">
+      <label class="qa-label">구분</label>
+      <div class="qa-seg" id="qa-type-seg">
+        <button type="button" class="on" onclick="qaSetType('buyer',this)">매수</button>
+        <button type="button" onclick="qaSetType('tenant',this)">임차</button>
+        <button type="button" onclick="qaSetType('seller',this)">매도</button>
+      </div>
+    </div>
+    <div class="qa-row">
+      <label class="qa-label">희망 지역·단지</label>
+      <input class="qa-input" id="qa-region" placeholder="예) 반포 래미안 트리니원" autocomplete="off">
+    </div>
+    <div class="qa-row qa-two">
+      <div>
+        <label class="qa-label">예산</label>
+        <div class="qa-unit"><input class="qa-input" id="qa-budget" inputmode="decimal" placeholder="25"><span class="u">억</span></div>
+      </div>
+      <div>
+        <label class="qa-label">평수</label>
+        <div class="qa-unit"><input class="qa-input" id="qa-pyeong" inputmode="numeric" placeholder="84"><span class="u">평</span></div>
+      </div>
+    </div>
+    <div class="qa-row">
+      <label class="qa-label">시기</label>
+      <div class="qa-chips" id="qa-timing">
+        <button type="button" onclick="qaSetTiming('즉시',this)">즉시</button>
+        <button type="button" onclick="qaSetTiming('3개월',this)">3개월</button>
+        <button type="button" onclick="qaSetTiming('6개월',this)">6개월</button>
+        <button type="button" onclick="qaSetTiming('미정',this)">미정</button>
+      </div>
+    </div>
+    <div class="qa-row">
+      <label class="qa-label">메모</label>
+      <button type="button" class="qa-mic" id="qa-mic" onclick="qaVoice()">🎙️ 말하기 (음성으로 받아쓰기)</button>
+      <textarea class="qa-input area" id="qa-memo" placeholder="통화 내용 메모 — 직접 타이핑도 됩니다"></textarea>
+    </div>
+    <button class="qa-save" onclick="saveQuickAdd()">저장하기</button>
   </div>
 </div>
 <div class="app" id="app"></div>
@@ -894,6 +974,7 @@ function enterApp() {
   try {
     loadData();
     render();
+    maybeQuickFromHash();
   } catch(e) {
     document.getElementById('app').innerHTML = `
       <div style="padding:40px;text-align:center;color:#e74c3c;">
@@ -1263,7 +1344,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.5.1';
+const APP_VERSION = 'v2.6.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1445,6 +1526,119 @@ function getSampleData() {
 }
 
 function today() { return new Date().toISOString().slice(0,10); }
+
+// ════════════════════════════════════════
+//  ⚡ 빠른 고객 추가 (모바일 통화 직후 30초 입력)
+// ════════════════════════════════════════
+window._qaType = 'buyer';
+window._qaTiming = '';
+
+function openQuickAdd() {
+  ['qa-name','qa-phone','qa-region','qa-budget','qa-pyeong','qa-memo'].forEach(function(id){
+    var e = document.getElementById(id); if (e) e.value = '';
+  });
+  window._qaType = 'buyer'; window._qaTiming = '';
+  var seg = document.getElementById('qa-type-seg');
+  if (seg) { var bs = seg.querySelectorAll('button'); for (var i=0;i<bs.length;i++) { if(i===0) bs[i].classList.add('on'); else bs[i].classList.remove('on'); } }
+  var tm = document.getElementById('qa-timing');
+  if (tm) { var ts = tm.querySelectorAll('button'); for (var j=0;j<ts.length;j++) ts[j].classList.remove('on'); }
+  var mic = document.getElementById('qa-mic'); if (mic) mic.textContent = '🎙️ 말하기 (음성으로 받아쓰기)';
+  document.getElementById('qa-modal').classList.add('show');
+  setTimeout(function(){ var n = document.getElementById('qa-name'); if (n) n.focus(); }, 120);
+}
+
+function closeQuickAdd() {
+  document.getElementById('qa-modal').classList.remove('show');
+  if (location.hash) { try { history.replaceState(null, '', location.pathname + location.search); } catch(e) {} }
+}
+
+function qaSetType(t, btn) {
+  window._qaType = t;
+  var seg = document.getElementById('qa-type-seg');
+  var bs = seg.querySelectorAll('button');
+  for (var i=0;i<bs.length;i++) bs[i].classList.remove('on');
+  btn.classList.add('on');
+}
+
+function qaSetTiming(v, btn) {
+  if (window._qaTiming === v) { window._qaTiming = ''; btn.classList.remove('on'); return; }
+  window._qaTiming = v;
+  var tm = document.getElementById('qa-timing');
+  var bs = tm.querySelectorAll('button');
+  for (var i=0;i<bs.length;i++) bs[i].classList.remove('on');
+  btn.classList.add('on');
+}
+
+function qaVoice() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('이 기기는 음성입력을 지원하지 않아요. 키보드로 입력해주세요'); return; }
+  var rec = new SR();
+  rec.lang = 'ko-KR'; rec.interimResults = false; rec.maxAlternatives = 1;
+  var btn = document.getElementById('qa-mic');
+  if (btn) btn.textContent = '🔴 듣는 중... (탭하면 중지)';
+  rec.onresult = function(e) {
+    var t = e.results[0][0].transcript;
+    var ta = document.getElementById('qa-memo');
+    if (ta) ta.value = (ta.value ? ta.value + ' ' : '') + t;
+  };
+  rec.onerror = function() { showToast('음성 인식 실패 — 키보드로 입력해주세요'); };
+  rec.onend = function() { if (btn) btn.textContent = '🎙️ 말하기 (음성으로 받아쓰기)'; };
+  try { rec.start(); } catch(e) { showToast('음성 입력을 시작할 수 없어요'); if (btn) btn.textContent = '🎙️ 말하기 (음성으로 받아쓰기)'; }
+}
+
+function saveQuickAdd() {
+  var name  = (document.getElementById('qa-name').value || '').trim();
+  var phone = (document.getElementById('qa-phone').value || '').trim();
+  if (!name && !phone) { showToast('이름이나 연락처 중 하나는 입력해주세요'); return; }
+
+  var region = (document.getElementById('qa-region').value || '').trim();
+  var budget = (document.getElementById('qa-budget').value || '').trim();
+  var pyeong = (document.getElementById('qa-pyeong').value || '').trim();
+  var timing = window._qaTiming || '';
+  var memo   = (document.getElementById('qa-memo').value || '').trim();
+
+  var interestParts = [];
+  if (region) interestParts.push(region);
+  if (budget) interestParts.push(budget + '억');
+  if (pyeong) interestParts.push(pyeong + '평');
+
+  var noteBits = [];
+  if (budget) noteBits.push('예산 ' + budget + '억');
+  if (pyeong) noteBits.push(pyeong + '평');
+  if (timing) noteBits.push('시기 ' + timing);
+
+  var rec = {
+    id: Date.now().toString(),
+    name: name || '(이름미정)',
+    phone: phone,
+    gender: '',
+    type: window._qaType || 'buyer',
+    grade: 'B',
+    status: 'received',
+    propMain: 'apt', propSub: '',
+    interest: interestParts.join(' '),
+    leaseExpiry: '',
+    lastContact: today(),
+    nextFollowUp: '',
+    stage: 0,
+    notes: noteBits.join(' · '),
+    contacts: memo ? [{ date: today(), text: memo, topic: '기타' }] : [],
+    sends: []
+  };
+
+  state.customers.unshift(rec);
+  saveData();
+  if (typeof cloudSync === 'function') { try { cloudSync('빠른추가'); } catch(e) {} }
+  closeQuickAdd();
+  showToast('빠른 추가 완료 ✅');
+  try { state.view = 'list'; render(); } catch(e) {}
+}
+
+// 홈 화면 아이콘(#quick)으로 진입 시 자동으로 빠른추가 열기
+function maybeQuickFromHash() {
+  if (/^#quick/i.test(location.hash || '')) { setTimeout(openQuickAdd, 150); }
+}
+window.addEventListener('hashchange', maybeQuickFromHash);
 
 function formatPhone(val) {
   const digits = val.replace(/\D/g, '');
@@ -1908,6 +2102,7 @@ function render() {
       <button class="btn btn-ghost" onclick="openSbModal()">⚙️</button>
       <button class="btn btn-ghost" onclick="exportData()">💾</button>
       <label class="btn btn-ghost" style="cursor:pointer">📂<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
+      <button class="btn btn-ghost" onclick="openQuickAdd()" title="빠른 고객 추가">⚡</button>
       <button class="btn btn-ghost" onclick="openPwModal()">🔐</button>
       <button class="btn btn-ghost" onclick="logout()">🚪</button>
     </div>

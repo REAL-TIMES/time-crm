@@ -697,6 +697,87 @@ const SB_ROW_ID     = 1;
 const SB_DEFAULT_URL = 'https://dostpddzdxkbjxuozkdm.supabase.co';
 const SB_DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvc3RwZGR6ZHhrYmp4dW96a2RtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTQ1NzksImV4cCI6MjA5Mjg5MDU3OX0.7shs6xUefTRJrnQr50Lw8ciLH22EYmX1LqZvTTaQbPs';
 
+// ════════════════════════════════════════
+//  Supabase Auth — 사용자 토큰 기반 인증
+//  (anon키만으로는 데이터에 접근 불가. 로그인한 사용자 토큰이 있어야 RLS 통과)
+// ════════════════════════════════════════
+const SB_TOKEN_KEY   = 'times_crm_sb_token';    // access_token (사용자 JWT)
+const SB_REFRESH_KEY = 'times_crm_sb_refresh';  // refresh_token
+const SB_EMAIL_KEY   = 'times_crm_sb_email';
+const SB_DEFAULT_EMAIL = 'cloud_office@naver.com';
+
+function getAccessToken() {
+  return sessionStorage.getItem(SB_TOKEN_KEY) || localStorage.getItem(SB_TOKEN_KEY) || null;
+}
+function getRefreshToken() {
+  return sessionStorage.getItem(SB_REFRESH_KEY) || localStorage.getItem(SB_REFRESH_KEY) || null;
+}
+function storeTokens(access, refresh, persist) {
+  try {
+    sessionStorage.setItem(SB_TOKEN_KEY, access);
+    if (refresh) sessionStorage.setItem(SB_REFRESH_KEY, refresh);
+  } catch(e) {}
+  try {
+    if (persist) {
+      localStorage.setItem(SB_TOKEN_KEY, access);
+      if (refresh) localStorage.setItem(SB_REFRESH_KEY, refresh);
+    } else {
+      localStorage.removeItem(SB_TOKEN_KEY);
+      localStorage.removeItem(SB_REFRESH_KEY);
+    }
+  } catch(e) {}
+}
+function clearTokens() {
+  try {
+    sessionStorage.removeItem(SB_TOKEN_KEY);
+    sessionStorage.removeItem(SB_REFRESH_KEY);
+    localStorage.removeItem(SB_TOKEN_KEY);
+    localStorage.removeItem(SB_REFRESH_KEY);
+  } catch(e) {}
+}
+// 데이터 요청용 공통 헤더 — 로그인 토큰이 있으면 그걸, 없으면 anon키
+function sbHeaders(extra) {
+  const cfg = getSbConfig();
+  const token = getAccessToken() || cfg.key;
+  const h = { 'apikey': cfg.key, 'Authorization': 'Bearer ' + token };
+  if (extra) { for (const k in extra) h[k] = extra[k]; }
+  return h;
+}
+// 이메일+비밀번호로 Supabase 인증 → 토큰 발급
+async function sbSignIn(email, password) {
+  const cfg = getSbConfig();
+  try {
+    const res = await fetch(cfg.url + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': cfg.key },
+      body: JSON.stringify({ email: email, password: password }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j || !j.access_token) return null;
+    return j;
+  } catch(e) { return null; }
+}
+// refresh_token으로 토큰 자동 갱신 (재로그인 없이 세션 연장)
+async function sbRefresh() {
+  const rt = getRefreshToken();
+  if (!rt) return false;
+  const persist = !!localStorage.getItem(SB_TOKEN_KEY);
+  const cfg = getSbConfig();
+  try {
+    const res = await fetch(cfg.url + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': cfg.key },
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    if (!res.ok) return false;
+    const j = await res.json();
+    if (!j || !j.access_token) return false;
+    storeTokens(j.access_token, j.refresh_token, persist);
+    return true;
+  } catch(e) { return false; }
+}
+
 async function sha256(str) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -748,48 +829,19 @@ async function loginSubmit() {
   loginBtn.textContent = '확인 중...';
 
   try {
-    // 1) 로컬/세션 해시 확인
-    let stored = getStoredHash();
-
-    // 2) 로컬에 없으면 Supabase에서 직접 가져오기
-    if (!stored && hasSbConfig()) {
-      const { url, key } = getSbConfig();
-      try {
-        const res = await fetch(`${url}/rest/v1/crm_data?id=eq.${SB_ROW_ID}&select=pw_hash`, {
-          headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-        });
-        const rows = await res.json();
-        if (rows[0].pw_hash) {
-          stored = rows[0].pw_hash;
-          storeAuthHash(stored);
-        }
-      } catch(e) {}
-    }
-
-    const isFirst = !stored;
-    const confirm = document.getElementById('login-confirm').value;
     const remember = document.getElementById('login-remember').checked;
-    const h = await sha256(pw);
+    const email = localStorage.getItem(SB_EMAIL_KEY) || SB_DEFAULT_EMAIL;
 
-    if (isFirst) {
-      // 최초 비밀번호 설정
-      if (pw.length < 4) { showLoginError('비밀번호는 4자 이상이어야 합니다'); return; }
-      if (pw !== confirm) { showLoginError('비밀번호가 일치하지 않습니다'); return; }
-      storeAuthHash(h);
-      setSession(h, remember);
-      await syncPasswordToCloud(h);
-      enterApp();
-      return;
-    }
+    // Supabase 인증 — 이메일+비밀번호로 사용자 토큰 발급
+    const auth = await sbSignIn(email, pw);
+    if (!auth) { showLoginError('비밀번호가 올바르지 않습니다'); return; }
 
-    // 로그인 — 로컬 또는 클라우드 해시와 비교
-    if (h !== stored) { showLoginError('비밀번호가 올바르지 않습니다'); return; }
-
-    // 세션 저장
-    storeAuthHash(stored);
-    setSession(h, remember);
+    storeTokens(auth.access_token, auth.refresh_token, remember);
+    try { localStorage.setItem(SB_EMAIL_KEY, email); } catch(e) {}
     enterApp();
 
+  } catch(e) {
+    showLoginError('로그인 중 오류가 발생했습니다');
   } finally {
     loginBtn.disabled = false;
     loginBtn.textContent = '로그인';
@@ -957,6 +1009,7 @@ async function resetPasswordFromCloud() {
 
 function logout() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
+  clearTokens();
   sessionStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(PERSIST_KEY);
   document.getElementById('login-pw').value = '';
@@ -982,18 +1035,26 @@ async function submitChangePw() {
   errEl.classList.remove('show');
 
   if (!oldPw || !newPw || !newPw2) { errEl.textContent='모든 항목을 입력해주세요'; errEl.classList.add('show'); return; }
-  if (newPw.length < 4) { errEl.textContent='새 비밀번호는 4자 이상이어야 합니다'; errEl.classList.add('show'); return; }
+  if (newPw.length < 8) { errEl.textContent='새 비밀번호는 8자 이상이어야 합니다'; errEl.classList.add('show'); return; }
   if (newPw !== newPw2) { errEl.textContent='새 비밀번호가 일치하지 않습니다'; errEl.classList.add('show'); return; }
 
-  const oldHash = await sha256(oldPw);
-  if (oldHash !== localStorage.getItem(AUTH_KEY)) {
-    errEl.textContent='현재 비밀번호가 올바르지 않습니다'; errEl.classList.add('show'); return;
-  }
-  const newHash = await sha256(newPw);
-  localStorage.setItem(AUTH_KEY, newHash);
-  const wasPersist = !!localStorage.getItem(PERSIST_KEY);
-  setSession(newHash, wasPersist);
-  await syncPasswordToCloud(newHash); // Supabase에도 즉시 저장
+  // 1) 현재 비밀번호 확인 — 기존 비밀번호로 재로그인 시도
+  const email = localStorage.getItem(SB_EMAIL_KEY) || SB_DEFAULT_EMAIL;
+  const chk = await sbSignIn(email, oldPw);
+  if (!chk) { errEl.textContent='현재 비밀번호가 올바르지 않습니다'; errEl.classList.add('show'); return; }
+  storeTokens(chk.access_token, chk.refresh_token, !!localStorage.getItem(SB_TOKEN_KEY));
+
+  // 2) Supabase 인증에 새 비밀번호 저장
+  const cfg = getSbConfig();
+  try {
+    const res = await fetch(cfg.url + '/auth/v1/user', {
+      method: 'PUT',
+      headers: sbHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ password: newPw }),
+    });
+    if (!res.ok) { errEl.textContent='변경 실패 (잠시 후 다시 시도)'; errEl.classList.add('show'); return; }
+  } catch(e) { errEl.textContent='네트워크 오류'; errEl.classList.add('show'); return; }
+
   closePwModal();
   showToast('비밀번호가 변경됐습니다 ✅');
 }
@@ -1027,56 +1088,50 @@ function hasSbConfig() {
   return url.startsWith('https://') && key.length > 10;
 }
 
-// 고객 데이터만 저장 (비밀번호는 건드리지 않음)
+// 고객 데이터 저장 — 로그인 사용자 토큰으로 (토큰 만료 시 자동 갱신 후 재시도)
 async function sbSave(data) {
   if (!hasSbConfig()) return false;
-  const { url, key } = getSbConfig();
-  try {
-    // data 컬럼만 업데이트 — pw_hash는 절대 덮어쓰지 않음
-    const res = await fetch(`${url}/rest/v1/crm_data?id=eq.${SB_ROW_ID}`, {
+  const cfg = getSbConfig();
+  function patch() {
+    return fetch(cfg.url + '/rest/v1/crm_data?id=eq.' + SB_ROW_ID, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': key,
-        'Authorization': `Bearer ${key}`,
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({ data }),
+      headers: sbHeaders({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ data: data }),
     });
-    if (res.ok) return true;
-    // row 없으면 INSERT (pw_hash 없이)
-    const ins = await fetch(`${url}/rest/v1/crm_data`, {
+  }
+  function insert() {
+    return fetch(cfg.url + '/rest/v1/crm_data', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': key,
-        'Authorization': `Bearer ${key}`,
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({ id: SB_ROW_ID, data }),
+      headers: sbHeaders({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ id: SB_ROW_ID, data: data }),
     });
+  }
+  try {
+    let res = await patch();
+    if (res.status === 401 && await sbRefresh()) res = await patch();
+    if (res.ok) return true;
+    // row 없으면 INSERT
+    let ins = await insert();
+    if (ins.status === 401 && await sbRefresh()) ins = await insert();
     return ins.ok;
   } catch(e) { return false; }
 }
 
-// Supabase에서 불러오기 (데이터 + 비밀번호 해시)
+// Supabase에서 불러오기 — 로그인 사용자 토큰으로 (만료 시 자동 갱신)
 async function sbLoad() {
   if (!hasSbConfig()) return null;
-  const { url, key } = getSbConfig();
-  try {
-    const res = await fetch(`${url}/rest/v1/crm_data?id=eq.${SB_ROW_ID}&select=data,pw_hash`, {
-      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+  const cfg = getSbConfig();
+  function go() {
+    return fetch(cfg.url + '/rest/v1/crm_data?id=eq.' + SB_ROW_ID + '&select=data', {
+      headers: sbHeaders(),
     });
+  }
+  try {
+    let res = await go();
+    if (res.status === 401 && await sbRefresh()) res = await go();
     if (!res.ok) return null;
     const rows = await res.json();
     if (!rows || rows.length === 0) return null;
-
-    // 비밀번호 해시 동기화 — 로컬에 없으면 클라우드 것으로 설정
-    if (rows[0].pw_hash) {
-      if (!localStorage.getItem(AUTH_KEY)) {
-        localStorage.setItem(AUTH_KEY, rows[0].pw_hash);
-      }
-    }
     return rows[0].data;
   } catch(e) { return null; }
 }
@@ -1123,7 +1178,7 @@ async function saveSbConfig() {
   errEl.textContent = '연결 테스트 중...'; errEl.style.color = '#f4d03f'; errEl.style.display = 'block';
   try {
     const res = await fetch(`${url}/rest/v1/crm_data?select=id&limit=1`, {
-      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+      headers: sbHeaders(),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch(e) {
@@ -2713,65 +2768,33 @@ function render() {
 
   app.innerHTML = html;
 }
+// ── 권위 있는 최종 정의: 로그인 = 사용자 토큰 보유 여부 ──
+// (위쪽의 옛 해시기반 isLoggedIn 정의들을 이 정의가 덮어씀)
+function isLoggedIn() {
+  return !!getAccessToken();
+}
+
 (function initAuth() {
   if (isLoggedIn()) { enterApp(); return; }
 
+  // 저장된 refresh_token이 있으면 자동 로그인 시도 (재로그인 없이 세션 복원)
+  if (getRefreshToken()) {
+    sbRefresh().then(function(ok) { if (ok) enterApp(); });
+  }
+
+  // 로그인(비밀번호) 폼 표시 — 비밀번호 '설정' 단계는 더 이상 없음
+  // (계정은 Supabase 대시보드에서 관리)
   const loginTitle   = document.getElementById('login-title');
   const fieldConfirm = document.getElementById('field-confirm');
   const loginBtn     = document.getElementById('login-btn');
   const pwLabel      = document.getElementById('pw-label');
   const rememberWrap = document.getElementById('remember-wrap');
 
-  const cached = getStoredHash();
-
-  if (cached) {
-    // 캐시가 있으면 즉시 로그인 폼 표시 — 네트워크 기다리지 않음
-    loginTitle.textContent = '비밀번호를 입력하세요';
-    fieldConfirm.style.display = 'none';
-    loginBtn.textContent = '로그인';
-    pwLabel.textContent = '비밀번호';
-    rememberWrap.style.display = '';
-    return;
-  }
-
-  // 캐시 없을 때 — 즉시 로그인 폼 표시 + 백그라운드로 cloud 확인
-  loginTitle.textContent = '비밀번호를 입력하세요';
-  pwLabel.textContent = '비밀번호';
-  fieldConfirm.style.display = 'none';
-  rememberWrap.style.display = '';
-  loginBtn.textContent = '로그인';
-
-  // 백그라운드에서 클라우드 확인 (AbortController로 3초 타임아웃)
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 3000);
-  if (hasSbConfig()) {
-    const { url, key } = getSbConfig();
-    fetch(`${url}/rest/v1/crm_data?id=eq.${SB_ROW_ID}&select=pw_hash`, {
-      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
-      signal: ctrl.signal,
-    }).then(r => r.json()).then(rows => {
-      clearTimeout(tid);
-      if (rows && rows[0] && rows[0].pw_hash) {
-        storeAuthHash(rows[0].pw_hash);
-        // 폼은 이미 보이고 있음 — 추가 업데이트 불필요
-      } else {
-        // 클라우드에도 없음 → 설정 화면으로 전환
-        loginTitle.textContent = '🔐 비밀번호를 설정해주세요';
-        fieldConfirm.style.display = 'block';
-        loginBtn.textContent = '비밀번호 설정하기';
-        pwLabel.textContent = '새 비밀번호 (4자 이상)';
-        rememberWrap.style.display = 'none';
-      }
-    }).catch(() => {
-      clearTimeout(tid);
-      // 네트워크 오류 → 설정 화면 표시
-      loginTitle.textContent = '🔐 비밀번호를 설정해주세요';
-      fieldConfirm.style.display = 'block';
-      loginBtn.textContent = '비밀번호 설정하기';
-      pwLabel.textContent = '새 비밀번호 (4자 이상)';
-      rememberWrap.style.display = 'none';
-    });
-  }
+  if (loginTitle)   loginTitle.textContent = '비밀번호를 입력하세요';
+  if (fieldConfirm) fieldConfirm.style.display = 'none';
+  if (loginBtn)     loginBtn.textContent = '로그인';
+  if (pwLabel)      pwLabel.textContent = '비밀번호';
+  if (rememberWrap) rememberWrap.style.display = '';
 })();
 
 </script>

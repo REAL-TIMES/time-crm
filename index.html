@@ -1359,7 +1359,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.7.0';
+const APP_VERSION = 'v2.8.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1726,6 +1726,54 @@ async function qaAnalyzeAudio(file) {
     if (st) st.textContent = '⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패');
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+// ── 기존 고객 폼: 통화 녹음 → AI 자동 정리 ──
+async function qaFormAudio(file) {
+  if (!state.editData) return;
+  var btn = document.getElementById('form-aibtn');
+  if (file.size > 19 * 1024 * 1024) { showToast('파일이 너무 커요(19MB 이하). 통화 일부만 잘라 올려주세요'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '🎧 분석 중... (15~30초)'; }
+  function resetBtn() { if (btn) { btn.disabled = false; btn.textContent = '🎧 통화 녹음 자동 정리'; } }
+  try {
+    var b64 = await fileToBase64(file);
+    var cfg = getSbConfig();
+    var token = getAccessToken() || cfg.key;
+    var res = await fetch(cfg.url + '/functions/v1/parse-call', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'apikey': cfg.key, 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ audioBase64: b64, mimeType: file.type || 'audio/mp4' })
+    });
+    if (res.status === 404) { showToast('AI 함수(parse-call)가 아직 배포되지 않았어요'); resetBtn(); return; }
+    if (!res.ok) { showToast('분석 실패 (' + res.status + '). 잠시 후 다시 시도'); resetBtn(); return; }
+    var j = await res.json();
+    if (j.error) { showToast('⚠️ ' + j.error); resetBtn(); return; }
+
+    var d = state.editData;
+    if (j.name && !d.name) d.name = j.name;
+    if (j.type) d.type = j.type;
+
+    var ip = [];
+    if (j.region) ip.push(j.region);
+    if (j.budget) ip.push(j.budget + '억');
+    if (j.pyeong) ip.push(j.pyeong + '평');
+    if (ip.length) d.interest = ip.join(' ');
+
+    var nb = [];
+    if (j.budget) nb.push('예산 ' + j.budget + '억');
+    if (j.pyeong) nb.push(j.pyeong + '평');
+    if (j.timing) nb.push('시기 ' + j.timing);
+    var head = nb.join(' · ');
+    var memo = j.memo || '';
+    var combined = (head ? head + (memo ? '\n' : '') : '') + memo;
+    if (combined) d.notes = (d.notes ? d.notes + '\n' : '') + combined;
+
+    render();
+    showToast('✅ AI가 정리했어요 — 확인 후 저장하세요');
+  } catch(e) {
+    showToast('⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패'));
+    resetBtn();
   }
 }
 
@@ -2416,6 +2464,11 @@ function render() {
           <button class="btn btn-icon" onclick="closeView()">✕</button>
         </div>
         <div class="modal-body">
+          <div style="margin-bottom:16px;">
+            <button type="button" id="form-aibtn" onclick="document.getElementById('form-audio').click()" style="width:100%;padding:13px;background:linear-gradient(135deg,#C9A24B,#b08a30);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">🎧 통화 녹음 자동 정리</button>
+            <input type="file" id="form-audio" accept="audio/*" style="display:none" onchange="if(this.files[0])qaFormAudio(this.files[0])">
+            <div style="font-size:12px;color:var(--text3);margin-top:6px;text-align:center;">녹음을 올리면 AI가 아래 칸을 자동으로 채워줘요 (확인 후 저장)</div>
+          </div>
           <div class="form-grid">
             <div class="form-section">기본 정보</div>
             <div class="form-group">

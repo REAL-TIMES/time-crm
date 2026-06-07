@@ -1329,7 +1329,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.9.2';
+const APP_VERSION = 'v2.9.3';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1758,10 +1758,15 @@ async function qaFormAudio(file) {
     var j = await res.json();
     if (j.error) { render(); showToast('⚠️ ' + j.error + ' — 전화번호·날짜는 채웠어요'); resetBtn(); return; }
 
-    // (B) 고객명 = [통화날짜 yymmdd] [매물조건]
+    // (B) 고객명
+    //   매수·임차(구하는 쪽) = [통화날짜 yymmdd] [매물조건]
+    //   매도·임대(내놓는 쪽) = [매물 + 역할]  (날짜 없음)
     var cond = (j.condition || '').trim();
     var datePrefix = fp.dateLabel || '';
-    var composed = (datePrefix + (datePrefix && cond ? ' ' : '') + cond).trim();
+    var isOwnerSide = (j.type === 'seller' || j.type === 'landlord');
+    var composed = isOwnerSide
+      ? cond
+      : (datePrefix + (datePrefix && cond ? ' ' : '') + cond).trim();
     if (composed && !d.name) d.name = composed;
 
     // (C) 유형 / 성별(단서 있을 때만)

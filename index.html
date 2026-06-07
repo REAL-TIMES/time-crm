@@ -1329,7 +1329,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.9.0';
+const APP_VERSION = 'v2.9.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2559,8 +2559,12 @@ function render() {
         <div class="modal-body">
           <div style="margin-bottom:16px;">
             <button type="button" id="form-aibtn" onclick="document.getElementById('form-audio').click()" style="width:100%;padding:13px;background:linear-gradient(135deg,#C9A24B,#b08a30);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">🎧 저장된 통화 녹음 불러오기 (AI 자동 정리)</button>
-            <input type="file" id="form-audio" accept="audio/*,.m4a,.amr,.mp3,.aac,.wav,.ogg,.opus,.3gp" style="display:none" onchange="if(this.files[0])qaFormAudio(this.files[0])">
-            <div style="font-size:12px;color:var(--text3);margin-top:6px;text-align:center;">저장된 통화 녹음(오디오 파일)을 고르세요. 목록에서 「파일/내 파일」을 선택하면 통화 녹음 폴더로 갈 수 있어요.</div>
+            <input type="file" id="form-audio" style="display:none" onchange="if(this.files[0])qaFormAudio(this.files[0])">
+            <div style="font-size:12px;color:var(--text3);margin-top:8px;line-height:1.6;background:#fffaf0;border:1px solid #efe3c4;border-radius:10px;padding:9px 11px;">
+              📁 누르면 <b>파일 관리자</b>가 열려요. 통화 녹음은 보통 여기 있어요:<br>
+              <span style="color:#a9801f;font-weight:700;">내장 저장공간 → Recordings → Call</span><br>
+              그 폴더에서 통화 녹음 파일을 고르세요.
+            </div>
           </div>
           <div class="form-grid">
             <div class="form-section">기본 정보</div>

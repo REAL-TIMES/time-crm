@@ -603,6 +603,28 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .trash-btns{display:flex;gap:6px;flex-shrink:0;}
 .trash-restore{padding:8px 12px;border:1px solid #13294B;background:#13294B;color:#fff;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 .trash-purge{padding:8px 12px;border:1px solid #e0c4bf;background:#fff;color:#C0392B;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+#followup-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
+#followup-modal.show{display:flex;}
+@media(min-width:600px){#followup-modal{align-items:center;padding:20px;}}
+.fu-box{background:#fff;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px;-webkit-overflow-scrolling:touch;}
+@media(min-width:600px){.fu-box{border-radius:18px;}}
+.fu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.fu-title{font-size:18px;font-weight:800;color:#13294B;}
+.fu-sub{font-size:12px;color:#7a8494;margin-bottom:8px;line-height:1.55;}
+.fu-tier{margin:16px 0 6px;font-size:13px;font-weight:800;padding:7px 11px;border-radius:9px;}
+.fu-tier.red{background:#fdecea;color:#C0392B;}
+.fu-tier.orange{background:#fef3e7;color:#C77F1A;}
+.fu-tier.yellow{background:#fcf8e3;color:#9a7d1a;}
+.fu-item{padding:11px 4px;border-bottom:1px solid #eee;}
+.fu-row1{display:flex;align-items:center;gap:8px;}
+.fu-grade{flex-shrink:0;width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;}
+.fu-name{flex:1;min-width:0;font-weight:700;color:#222a35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fu-days{font-size:12px;color:#9aa3b2;flex-shrink:0;}
+.fu-meta{font-size:12px;color:#9aa3b2;margin:3px 0 8px 32px;}
+.fu-btns{display:flex;gap:6px;margin-left:32px;flex-wrap:wrap;}
+.fu-btns button{padding:7px 11px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid #d5dae2;background:#fff;color:#33405a;}
+.fu-btns .b-call{background:#13294B;color:#fff;border-color:#13294B;}
+.fu-empty{padding:28px;text-align:center;color:#9aa3b2;line-height:1.6;}
 .qa-row{margin-bottom:13px;}
 .qa-label{font-size:13px;font-weight:700;color:#56607a;margin-bottom:6px;display:block;}
 .qa-input{width:100%;padding:13px 14px;border:1.5px solid #e2e5ec;border-radius:12px;font-size:16px;font-family:inherit;color:#222a35;background:#fff;}
@@ -742,6 +764,13 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
     </div>
     <div class="trash-sub">삭제한 고객은 30일간 보관되며, 그 안에 복구할 수 있어요. 30일이 지나면 자동으로 완전 삭제됩니다.</div>
     <div id="trash-body"></div>
+  </div>
+</div>
+<div id="followup-modal">
+  <div class="fu-box">
+    <div class="fu-head"><div class="fu-title">🔄 팔로우업 점검</div><button class="qa-x" onclick="closeFollowup()">✕</button></div>
+    <div class="fu-sub">한동안 챙기지 못한 고객이에요. 매도·임대·종료·보류·관리 고객은 빼고, 오래된 순으로 보여드려요. 행동하면 목록에서 빠지고, 다시 시간이 지나면 올라와요.</div>
+    <div id="fu-body"></div>
   </div>
 </div>
 <div class="app" id="app"></div>
@@ -1329,7 +1358,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.9.3';
+const APP_VERSION = 'v2.10.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2118,6 +2147,99 @@ async function purgeOldTrash() {
 
 function escapeHtmlT(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// ════════════════════════════════════════
+//  🔄 팔로우업 점검 (오래된 고객 정리)
+//  - 제외: 휴지통 / 종료 / 보류 / 관리 / 매도 / 임대
+//  - 포함: 마지막 연락 7일+ 또는 연락기록 없음
+// ════════════════════════════════════════
+function followupCandidates() {
+  var out = [];
+  var arr = state.customers || [];
+  for (var i=0;i<arr.length;i++) {
+    var c = arr[i];
+    if (c.deleted) continue;
+    if (c.status === 'closed' || c.status === 'hold' || c.status === 'managing') continue;
+    if (c.type === 'seller' || c.type === 'landlord') continue;
+    var days = c.lastContact ? Math.floor((Date.now() - new Date(c.lastContact)) / 86400000) : 99999;
+    if (days >= 7) out.push({ c: c, days: days });
+  }
+  out.sort(function(a,b){ return b.days - a.days; });
+  return out;
+}
+
+function gradeColor(g) {
+  return ({ S:'#C0392B', A:'#E07B39', B:'#2E7D9A', C:'#8a93a2', D:'#aab2bf' })[g] || '#8a93a2';
+}
+
+function fuItemHtml(c, days) {
+  var g = c.grade || '';
+  var dayTxt = days >= 99999 ? '연락 기록 없음' : (days + '일 경과');
+  var typeLabel = TYPE_LABEL[c.type] || '';
+  return '<div class="fu-item">'
+    + '<div class="fu-row1">'
+    + '<span class="fu-grade" style="background:' + gradeColor(g) + '">' + (g || '-') + '</span>'
+    + '<span class="fu-name">' + escapeHtmlT(c.name || '(이름없음)') + '</span>'
+    + '<span class="fu-days">' + dayTxt + '</span></div>'
+    + '<div class="fu-meta">' + typeLabel + (c.interest ? ' · ' + escapeHtmlT(c.interest) : '') + '</div>'
+    + '<div class="fu-btns">'
+    + '<button class="b-call" onclick="fuAction(\'' + c.id + '\',\'contacted\')">📞 연락함</button>'
+    + '<button onclick="fuAction(\'' + c.id + '\',\'hold\')">⏸ 보류</button>'
+    + '<button onclick="fuAction(\'' + c.id + '\',\'managing\')">🔁 관리</button>'
+    + '<button onclick="fuAction(\'' + c.id + '\',\'closed\')">✅ 종료</button>'
+    + '</div></div>';
+}
+
+function renderFollowup() {
+  var body = document.getElementById('fu-body');
+  if (!body) return;
+  var list = followupCandidates();
+  if (!list.length) {
+    body.innerHTML = '<div class="fu-empty">점검할 고객이 없어요 👍<br>모두 최근에 챙기셨네요.</div>';
+    return;
+  }
+  var red=[], orange=[], yellow=[];
+  for (var i=0;i<list.length;i++) {
+    var d = list[i].days;
+    if (d >= 30) red.push(list[i]);
+    else if (d >= 14) orange.push(list[i]);
+    else yellow.push(list[i]);
+  }
+  function tier(title, cls, items) {
+    if (!items.length) return '';
+    var h = '<div class="fu-tier ' + cls + '">' + title + ' · ' + items.length + '명</div>';
+    for (var j=0;j<items.length;j++) h += fuItemHtml(items[j].c, items[j].days);
+    return h;
+  }
+  var html = '';
+  html += tier('🔴 종료 검토 (30일+ 또는 연락기록 없음)', 'red', red);
+  html += tier('🟠 결정 필요 (14일+) — 보류·관리?', 'orange', orange);
+  html += tier('🟡 다시 팔로우 (7일+)', 'yellow', yellow);
+  body.innerHTML = html;
+}
+
+function openFollowup() { renderFollowup(); var m=document.getElementById('followup-modal'); if(m) m.classList.add('show'); }
+function closeFollowup() { var m=document.getElementById('followup-modal'); if(m) m.classList.remove('show'); }
+
+async function fuAction(id, act) {
+  var c = (state.customers || []).find(function(x){ return x.id === id; });
+  if (!c) return;
+  var msg = '';
+  if (act === 'contacted') {
+    var t = today();
+    c.lastContact = t;
+    if (!c.contacts) c.contacts = [];
+    c.contacts.unshift({ date: t, text: '팔로우업 연락', topic: '' });
+    var nd = new Date(); nd.setDate(nd.getDate() + 7);
+    c.nextFollowUp = nd.toISOString().slice(0,10);
+    msg = '📞 연락 처리 — 7일 후 다시 알림';
+  } else if (act === 'hold')     { c.status = 'hold';     msg = '⏸️ 보류로 변경'; }
+  else if (act === 'managing')   { c.status = 'managing'; msg = '🔁 관리로 변경'; }
+  else if (act === 'closed')     { c.status = 'closed';   msg = '✅ 종료로 변경'; }
+  renderFollowup();
+  render();
+  await persistAll(msg);
+}
+
 function openTrash() {
   renderTrash();
   var m = document.getElementById('trash-modal'); if (m) m.classList.add('show');
@@ -2384,6 +2506,7 @@ function render() {
       <span class="hdr-more-wrap">
         <button class="btn btn-ghost" onclick="toggleHeaderMenu(event)" title="더보기">⋯</button>
         <div class="hdr-menu" id="hdr-menu">
+          <button class="hdr-item" onclick="closeHeaderMenu();openFollowup()">🔄 팔로우업 점검${(function(){var n=followupCandidates().length;return n?' ('+n+')':'';})()}</button>
           <button class="hdr-item" onclick="closeHeaderMenu();openTrash()">🗑 휴지통${(function(){var n=(state.customers||[]).filter(function(c){return c.deleted;}).length;return n?' ('+n+')':'';})()}</button>
           <button class="hdr-item" onclick="closeHeaderMenu();openSbModal()">⚙️ 클라우드 설정</button>
           <button class="hdr-item" onclick="closeHeaderMenu();exportData()">💾 백업 내보내기</button>

@@ -1329,7 +1329,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.9.1';
+const APP_VERSION = 'v2.9.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1698,6 +1698,27 @@ async function qaAnalyzeAudio(file) {
   }
 }
 
+// 통화 녹음 파일명에서 전화번호·날짜 추출 (규칙 기반, 100% 정확)
+// 예: "통화 녹음 01012345678_260607_143022.m4a"
+function parseCallFilename(fname) {
+  var out = { phone:'', dateLabel:'', dateFull:'' };
+  if (!fname) return out;
+  var base = String(fname).replace(/\.[^.]+$/, ''); // 확장자 제거
+  // 1) 전화번호: 01로 시작하는 10~11자리
+  var mPhone = base.match(/(01[0-9]\d{7,8})/);
+  if (mPhone) out.phone = formatPhone(mPhone[1]);
+  // 2) 날짜(yymmdd): 전화번호 뒤 첫 6자리
+  var after = mPhone ? base.slice(base.indexOf(mPhone[1]) + mPhone[1].length) : base;
+  var mDate = after.match(/(\d{6})/);
+  if (mDate) {
+    var s = mDate[1];
+    out.dateLabel = s;
+    var year = 2000 + parseInt(s.slice(0,2), 10);
+    out.dateFull = year + '-' + s.slice(2,4) + '-' + s.slice(4,6);
+  }
+  return out;
+}
+
 // ── 기존 고객 폼: 통화 녹음 → AI 자동 정리 ──
 async function qaFormAudio(file) {
   if (!state.editData) return;
@@ -1705,6 +1726,13 @@ async function qaFormAudio(file) {
   if (file.size > 19 * 1024 * 1024) { showToast('파일이 너무 커요(19MB 이하). 통화 일부만 잘라 올려주세요'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '🎧 분석 중... (15~30초)'; }
   function resetBtn() { if (btn) { btn.disabled = false; btn.textContent = '🎧 저장된 통화 녹음 불러오기 (AI 자동 정리)'; } }
+
+  var d = state.editData;
+  // (A) 파일명 기반 자동입력 — 서버 없이도 즉시 동작
+  var fp = parseCallFilename(file.name);
+  if (fp.phone && !d.phone) d.phone = fp.phone;
+  if (fp.dateFull) d.lastContact = fp.dateFull;
+
   try {
     var b64 = await fileToBase64(file);
     var mime = file.type;
@@ -1725,21 +1753,29 @@ async function qaFormAudio(file) {
       headers: { 'Content-Type':'application/json', 'apikey': cfg.key, 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ audioBase64: b64, mimeType: mime })
     });
-    if (res.status === 404) { showToast('AI 함수(parse-call)가 아직 배포되지 않았어요'); resetBtn(); return; }
-    if (!res.ok) { showToast('분석 실패 (' + res.status + '). 잠시 후 다시 시도'); resetBtn(); return; }
+    if (res.status === 404) { render(); showToast('AI 함수 미배포 — 전화번호·날짜는 채웠어요'); resetBtn(); return; }
+    if (!res.ok) { render(); showToast('AI 분석 실패(' + res.status + ') — 전화번호·날짜는 채웠어요'); resetBtn(); return; }
     var j = await res.json();
-    if (j.error) { showToast('⚠️ ' + j.error); resetBtn(); return; }
+    if (j.error) { render(); showToast('⚠️ ' + j.error + ' — 전화번호·날짜는 채웠어요'); resetBtn(); return; }
 
-    var d = state.editData;
-    if (j.name && !d.name) d.name = j.name;
+    // (B) 고객명 = [통화날짜 yymmdd] [매물조건]
+    var cond = (j.condition || '').trim();
+    var datePrefix = fp.dateLabel || '';
+    var composed = (datePrefix + (datePrefix && cond ? ' ' : '') + cond).trim();
+    if (composed && !d.name) d.name = composed;
+
+    // (C) 유형 / 성별(단서 있을 때만)
     if (j.type) d.type = j.type;
+    if (j.gender === 'male' || j.gender === 'female') d.gender = j.gender;
 
+    // (D) 관심매물 = 지역/예산/평형
     var ip = [];
     if (j.region) ip.push(j.region);
     if (j.budget) ip.push(j.budget + '억');
     if (j.pyeong) ip.push(j.pyeong + '평');
     if (ip.length) d.interest = ip.join(' ');
 
+    // (E) 메모
     var nb = [];
     if (j.budget) nb.push('예산 ' + j.budget + '억');
     if (j.pyeong) nb.push(j.pyeong + '평');
@@ -1752,7 +1788,8 @@ async function qaFormAudio(file) {
     render();
     showToast('✅ AI가 정리했어요 — 확인 후 저장하세요');
   } catch(e) {
-    showToast('⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패'));
+    render();
+    showToast('⚠️ 오류 — 전화번호·날짜는 채웠어요');
     resetBtn();
   }
 }

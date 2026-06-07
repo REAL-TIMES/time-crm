@@ -66,6 +66,12 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 .logo-name { font-size: 13px; font-weight: 700; color: #fff; }
 .logo-sub  { display: none; }
 .header-actions { display: flex; gap: 4px; align-items: center; }
+.app-ver { font-size: 13px; font-weight: 800; color: var(--gold); padding: 0 6px; letter-spacing: .3px; }
+.hdr-more-wrap { position: relative; display: inline-flex; }
+.hdr-menu { position: absolute; right: 0; top: 36px; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.28); padding: 6px; display: none; min-width: 184px; z-index: 300; }
+.hdr-menu.show { display: block; }
+.hdr-menu .hdr-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; padding: 12px 14px; font-size: 14px; color: #222a35; cursor: pointer; border-radius: 9px; text-align: left; font-family: inherit; }
+.hdr-menu .hdr-item:hover { background: #f2f1ec; }
 
 /* 메인 바디 — 사이드바 + 콘텐츠 */
 .body-wrap {
@@ -713,67 +719,6 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
     </div>
   </div>
 </div>
-<div id="qa-modal">
-  <div class="qa-box">
-    <div class="qa-head">
-      <div class="qa-title">⚡ 빠른 고객 추가</div>
-      <button class="qa-x" onclick="closeQuickAdd()">✕</button>
-    </div>
-    <div class="qa-row">
-      <button type="button" class="qa-aibtn" id="qa-aibtn" onclick="document.getElementById('qa-audio').click()">🎧 통화 녹음 올려서 AI 자동 정리</button>
-      <input type="file" id="qa-audio" accept="audio/*" style="display:none" onchange="if(this.files[0])qaAnalyzeAudio(this.files[0])">
-      <div class="qa-aistatus" id="qa-aistatus"></div>
-    </div>
-    <div class="qa-row">
-      <label class="qa-label">이름</label>
-      <input class="qa-input" id="qa-name" placeholder="고객 이름" autocomplete="off">
-    </div>
-    <div class="qa-row">
-      <label class="qa-label">연락처</label>
-      <input class="qa-input" id="qa-phone" type="tel" inputmode="numeric" placeholder="010-0000-0000" oninput="this.value=formatPhone(this.value)">
-    </div>
-    <div class="qa-row">
-      <label class="qa-label">구분</label>
-      <div class="qa-seg" id="qa-type-seg">
-        <button type="button" class="on" onclick="qaSetType('buyer',this)">매수</button>
-        <button type="button" onclick="qaSetType('tenant',this)">임차</button>
-        <button type="button" onclick="qaSetType('seller',this)">매도</button>
-      </div>
-    </div>
-    <div class="qa-row">
-      <label class="qa-label">희망 지역·단지</label>
-      <input class="qa-input" id="qa-region" placeholder="예) 반포 래미안 트리니원" autocomplete="off">
-    </div>
-    <div class="qa-row qa-two">
-      <div>
-        <label class="qa-label">예산</label>
-        <div class="qa-unit"><input class="qa-input" id="qa-budget" inputmode="decimal" placeholder="25"><span class="u">억</span></div>
-      </div>
-      <div>
-        <label class="qa-label">평수</label>
-        <div class="qa-unit"><input class="qa-input" id="qa-pyeong" inputmode="numeric" placeholder="84"><span class="u">평</span></div>
-      </div>
-    </div>
-    <div class="qa-row">
-      <label class="qa-label">시기</label>
-      <div class="qa-chips" id="qa-timing">
-        <button type="button" onclick="qaSetTiming('즉시',this)">즉시</button>
-        <button type="button" onclick="qaSetTiming('3개월',this)">3개월</button>
-        <button type="button" onclick="qaSetTiming('6개월',this)">6개월</button>
-        <button type="button" onclick="qaSetTiming('미정',this)">미정</button>
-      </div>
-    </div>
-    <div class="qa-row">
-      <label class="qa-label">메모</label>
-      <button type="button" class="qa-mic" id="qa-mic" onclick="qaVoice()">🎙️ 말하기 (음성으로 받아쓰기)</button>
-      <textarea class="qa-input area" id="qa-memo" placeholder="통화 내용 메모 — 직접 타이핑도 됩니다"></textarea>
-    </div>
-    <div class="qa-actions">
-      <button class="qa-vcf" onclick="qaSaveToPhone()" title="폰 연락처에 저장">📇 연락처</button>
-      <button class="qa-save" onclick="saveQuickAdd()">저장하기</button>
-    </div>
-  </div>
-</div>
 <div class="app" id="app"></div>
 <div class="toast" id="toast"></div>
 
@@ -989,7 +934,6 @@ function enterApp() {
   try {
     loadData();
     render();
-    maybeQuickFromHash();
   } catch(e) {
     document.getElementById('app').innerHTML = `
       <div style="padding:40px;text-align:center;color:#e74c3c;">
@@ -1359,7 +1303,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.8.0';
+const APP_VERSION = 'v2.8.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1655,7 +1599,6 @@ function saveQuickAdd() {
 function maybeQuickFromHash() {
   if (/^#quick/i.test(location.hash || '')) { setTimeout(openQuickAdd, 150); }
 }
-window.addEventListener('hashchange', maybeQuickFromHash);
 
 // ── 녹음 → AI 자동 정리 ──
 function fileToBase64(file) {
@@ -1735,15 +1678,26 @@ async function qaFormAudio(file) {
   var btn = document.getElementById('form-aibtn');
   if (file.size > 19 * 1024 * 1024) { showToast('파일이 너무 커요(19MB 이하). 통화 일부만 잘라 올려주세요'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '🎧 분석 중... (15~30초)'; }
-  function resetBtn() { if (btn) { btn.disabled = false; btn.textContent = '🎧 통화 녹음 자동 정리'; } }
+  function resetBtn() { if (btn) { btn.disabled = false; btn.textContent = '🎧 저장된 통화 녹음 불러오기 (AI 자동 정리)'; } }
   try {
     var b64 = await fileToBase64(file);
+    var mime = file.type;
+    if (!mime) {
+      var fn = (file.name || '').toLowerCase();
+      if (fn.endsWith('.m4a')) mime = 'audio/mp4';
+      else if (fn.endsWith('.amr')) mime = 'audio/amr';
+      else if (fn.endsWith('.mp3')) mime = 'audio/mp3';
+      else if (fn.endsWith('.wav')) mime = 'audio/wav';
+      else if (fn.endsWith('.aac')) mime = 'audio/aac';
+      else if (fn.endsWith('.ogg')) mime = 'audio/ogg';
+      else mime = 'audio/mp4';
+    }
     var cfg = getSbConfig();
     var token = getAccessToken() || cfg.key;
     var res = await fetch(cfg.url + '/functions/v1/parse-call', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'apikey': cfg.key, 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ audioBase64: b64, mimeType: file.type || 'audio/mp4' })
+      body: JSON.stringify({ audioBase64: b64, mimeType: mime })
     });
     if (res.status === 404) { showToast('AI 함수(parse-call)가 아직 배포되지 않았어요'); resetBtn(); return; }
     if (!res.ok) { showToast('분석 실패 (' + res.status + '). 잠시 후 다시 시도'); resetBtn(); return; }
@@ -1775,6 +1729,34 @@ async function qaFormAudio(file) {
     showToast('⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패'));
     resetBtn();
   }
+}
+
+// ── 헤더 더보기 메뉴 ──
+function toggleHeaderMenu(e) {
+  if (e) e.stopPropagation();
+  var m = document.getElementById('hdr-menu');
+  if (m) m.classList.toggle('show');
+}
+function closeHeaderMenu() {
+  var m = document.getElementById('hdr-menu');
+  if (m) m.classList.remove('show');
+}
+document.addEventListener('click', function() { closeHeaderMenu(); });
+
+// ── 고객 폼 → 폰 연락처 저장 (vCard) ──
+function formSaveToPhone() {
+  var d = state.editData; if (!d) return;
+  var name = (d.name || '').trim();
+  var phone = (d.phone || '').trim();
+  if (!phone) { showToast('연락처를 먼저 입력해주세요'); return; }
+  var vcard = 'BEGIN:VCARD\r\nVERSION:3.0\r\nN:;' + name + ';;;\r\nFN:' + name + '\r\nTEL;TYPE=CELL:' + phone + '\r\nEND:VCARD\r\n';
+  var blob = new Blob([vcard], { type:'text/vcard;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = (name || 'contact') + '.vcf';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ try { document.body.removeChild(a); } catch(e) {} URL.revokeObjectURL(url); }, 600);
+  showToast('연락처 파일 생성 — "추가" 화면에서 확인하세요');
 }
 
 // ── 폰 연락처에 저장 (vCard) ──
@@ -2250,13 +2232,17 @@ function render() {
     <div class="header-actions">
       <span id="sync-status" style="font-size:15px;cursor:pointer;" onclick="hasSbConfig()?cloudSync('수동'):openSbModal()" title="동기화">☁️</span>
       <span id="backup-status" style="font-size:10px;color:rgba(255,255,255,0.35);white-space:nowrap;"></span>
-      <span style="font-size:10px;color:rgba(255,255,255,0.2);padding:0 4px;">${APP_VERSION}</span>
-      <button class="btn btn-ghost" onclick="openSbModal()">⚙️</button>
-      <button class="btn btn-ghost" onclick="exportData()">💾</button>
-      <label class="btn btn-ghost" style="cursor:pointer">📂<input type="file" accept=".json" onchange="importData(event)" style="display:none"></label>
-      <button class="btn btn-ghost" onclick="openQuickAdd()" title="빠른 고객 추가">⚡</button>
-      <button class="btn btn-ghost" onclick="openPwModal()">🔐</button>
-      <button class="btn btn-ghost" onclick="logout()">🚪</button>
+      <span class="app-ver">${APP_VERSION}</span>
+      <span class="hdr-more-wrap">
+        <button class="btn btn-ghost" onclick="toggleHeaderMenu(event)" title="더보기">⋯</button>
+        <div class="hdr-menu" id="hdr-menu">
+          <button class="hdr-item" onclick="closeHeaderMenu();openSbModal()">⚙️ 클라우드 설정</button>
+          <button class="hdr-item" onclick="closeHeaderMenu();exportData()">💾 백업 내보내기</button>
+          <label class="hdr-item" style="cursor:pointer">📂 가져오기<input type="file" accept=".json" onchange="closeHeaderMenu();importData(event)" style="display:none"></label>
+          <button class="hdr-item" onclick="closeHeaderMenu();openPwModal()">🔐 비밀번호 변경</button>
+        </div>
+      </span>
+      <button class="btn btn-ghost" onclick="logout()" title="로그아웃">🚪</button>
     </div>
   </div>`;
 
@@ -2465,9 +2451,9 @@ function render() {
         </div>
         <div class="modal-body">
           <div style="margin-bottom:16px;">
-            <button type="button" id="form-aibtn" onclick="document.getElementById('form-audio').click()" style="width:100%;padding:13px;background:linear-gradient(135deg,#C9A24B,#b08a30);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">🎧 통화 녹음 자동 정리</button>
-            <input type="file" id="form-audio" accept="audio/*" style="display:none" onchange="if(this.files[0])qaFormAudio(this.files[0])">
-            <div style="font-size:12px;color:var(--text3);margin-top:6px;text-align:center;">녹음을 올리면 AI가 아래 칸을 자동으로 채워줘요 (확인 후 저장)</div>
+            <button type="button" id="form-aibtn" onclick="document.getElementById('form-audio').click()" style="width:100%;padding:13px;background:linear-gradient(135deg,#C9A24B,#b08a30);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">🎧 저장된 통화 녹음 불러오기 (AI 자동 정리)</button>
+            <input type="file" id="form-audio" style="display:none" onchange="if(this.files[0])qaFormAudio(this.files[0])">
+            <div style="font-size:12px;color:var(--text3);margin-top:6px;text-align:center;">이미 저장된 통화 녹음 파일을 고르세요 (보통 「내 파일 → 통화/Recordings」). 새로 녹음하는 게 아니에요.</div>
           </div>
           <div class="form-grid">
             <div class="form-section">기본 정보</div>
@@ -2575,6 +2561,7 @@ function render() {
         </div>
         <div class="modal-footer">
           <button class="btn" onclick="closeView()">취소</button>
+          <button class="btn" onclick="formSaveToPhone()" title="폰 연락처에 저장">📇 연락처 저장</button>
           <button class="btn btn-primary" onclick="saveCustomer()">${isAdd?'추가하기':'저장하기'}</button>
         </div>
       </div>

@@ -1370,7 +1370,7 @@ const STATUS_ICON = {
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
 
-const APP_VERSION = 'v2.11.1';
+const APP_VERSION = 'v2.11.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2308,6 +2308,26 @@ function addSend() {
 }
 
 // ── 일정(schedules) ──
+// 시간 표시용 파싱/조합 (저장은 24시간 "HH:MM")
+function parseSchedTime(t) {
+  if (!t || t.indexOf(':') < 0) return { ampm:'오전', h12:'', min:'00' };
+  var p = t.split(':');
+  var H = parseInt(p[0],10) || 0;
+  var ampm = H < 12 ? '오전' : '오후';
+  var h12 = H % 12; if (h12 === 0) h12 = 12;
+  return { ampm: ampm, h12: String(h12), min: p[1] || '00' };
+}
+function schedTimeChange() {
+  var ap = document.getElementById('sch-ampm');
+  var h  = document.getElementById('sch-h');
+  var m  = document.getElementById('sch-m');
+  if (!ap || !h || !m) return;
+  if (!h.value) { state.schedTime = ''; return; }
+  var H = parseInt(h.value,10) % 12;
+  if (ap.value === '오후') H += 12;
+  state.schedTime = (H < 10 ? '0'+H : ''+H) + ':' + (m.value || '00');
+}
+
 async function addSchedule() {
   const c = state.customers.find(x=>x.id===state.selectedId);
   if(!c) return;
@@ -2935,6 +2955,9 @@ function render() {
       const up = allSch.filter(s=>!s.done).slice().sort((a,b)=>((a.date||'')+(a.time||'')).localeCompare((b.date||'')+(b.time||'')));
       const dn = allSch.filter(s=>s.done).slice().sort((a,b)=>((b.date||'')).localeCompare((a.date||'')));
       const typeOpts = SCHED_TYPES.map(t=>`<option value="${t}"${(state.schedType||'상담')===t?' selected':''}>${SCHED_ICON[t]} ${t}</option>`).join('');
+      const pt = parseSchedTime(state.schedTime||'');
+      const hourOpts = [1,2,3,4,5,6,7,8,9,10,11,12].map(h=>`<option value="${h}"${pt.h12===String(h)?' selected':''}>${h}시</option>`).join('');
+      const minOpts = ['00','10','20','30','40','50'].map(m=>`<option value="${m}"${pt.min===m?' selected':''}>${m}분</option>`).join('');
       const schItem = (s)=>`
         <div class="sch-item${s.done?' done':''}">
           <div class="sch-main">
@@ -2953,7 +2976,17 @@ function render() {
           <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">📅 일정 추가 (상담·투어·통화 약속)</div>
           <div class="log-add-row">
             <input class="form-input" type="date" value="${state.schedDate||today()}" onchange="state.schedDate=this.value" style="flex:0 0 138px">
-            <input class="form-input" type="time" step="600" value="${state.schedTime||''}" onchange="state.schedTime=this.value" style="flex:0 0 108px">
+            <select class="form-input" id="sch-ampm" onchange="schedTimeChange()" style="flex:0 0 72px">
+              <option value="오전"${pt.ampm==='오전'?' selected':''}>오전</option>
+              <option value="오후"${pt.ampm==='오후'?' selected':''}>오후</option>
+            </select>
+            <select class="form-input" id="sch-h" onchange="schedTimeChange()" style="flex:0 0 66px">
+              <option value=""${pt.h12===''?' selected':''}>시</option>
+              ${hourOpts}
+            </select>
+            <select class="form-input" id="sch-m" onchange="schedTimeChange()" style="flex:0 0 72px">${minOpts}</select>
+          </div>
+          <div class="log-add-row">
             <select class="form-input" onchange="state.schedType=this.value" style="flex:1">${typeOpts}</select>
           </div>
           <div class="log-add-row">

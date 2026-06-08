@@ -483,6 +483,8 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .contact-alert-banner:hover { opacity: 0.85; }
 .sched-alert-banner{margin:0 16px 8px;padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;background:#eaf2fb;border:1px solid #c9dcf3;color:#1c4e8a;}
 .sched-alert-banner:hover{opacity:.85;}
+.sched-alert-banner.missed{background:#fdecea;border-color:#f4c7c1;color:#b03a2e;}
+.fu-tier.missed{background:#fbe0dd;color:#a52714;}
 #sched-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #sched-modal.show{display:flex;}
 @media(min-width:600px){#sched-modal{align-items:center;padding:20px;}}
@@ -1386,7 +1388,7 @@ const STATUS_ICON = {
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
 
-const APP_VERSION = 'v2.12.0';
+const APP_VERSION = 'v2.12.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2301,12 +2303,28 @@ function upcomingSchedules() {
   out.sort(function(a,b){ return ((a.s.date+(a.s.time||''))).localeCompare(b.s.date+(b.s.time||'')); });
   return out;
 }
+function missedSchedules() {
+  var t = today(); var out = [];
+  var arr = state.customers || [];
+  for (var i=0;i<arr.length;i++) {
+    var c = arr[i]; if (c.deleted) continue;
+    var sch = c.schedules || [];
+    for (var j=0;j<sch.length;j++) {
+      var s = sch[j];
+      if (s.done || !s.date) continue;
+      if (s.date < t) out.push({ cid:c.id, cname:c.name, cphone:c.phone, s:s });
+    }
+  }
+  out.sort(function(a,b){ return ((b.s.date+(b.s.time||''))).localeCompare(a.s.date+(a.s.time||'')); });
+  return out;
+}
 function openSchedAgenda() { renderSchedAgenda(); var m=document.getElementById('sched-modal'); if(m) m.classList.add('show'); }
 function closeSchedAgenda() { var m=document.getElementById('sched-modal'); if(m) m.classList.remove('show'); }
 function renderSchedAgenda() {
   var body = document.getElementById('sched-agenda-body'); if (!body) return;
+  var missed = missedSchedules();
   var ups = upcomingSchedules();
-  if (!ups.length) { body.innerHTML = '<div class="fu-empty">다가오는 일정이 없어요.</div>'; return; }
+  if (!missed.length && !ups.length) { body.innerHTML = '<div class="fu-empty">다가오는 일정이 없어요.</div>'; return; }
   var t = today(); var wkEnd = addDaysStr(t, 6);
   var g1=[], g2=[], g3=[];
   for (var i=0;i<ups.length;i++) {
@@ -2315,7 +2333,7 @@ function renderSchedAgenda() {
     else if (d <= wkEnd) g2.push(ups[i]);
     else g3.push(ups[i]);
   }
-  function item(x) {
+  function item(x, isMissed) {
     var s = x.s;
     return '<div class="ag-item">'
       + '<div class="ag-when">' + fmtDateFull(s.date) + (s.time ? ' · ' + toAmPm(s.time) : '') + '</div>'
@@ -2328,15 +2346,21 @@ function renderSchedAgenda() {
       + '<div class="sch-btns">'
         + '<button class="btn btn-sm b-call" onclick="fuCall(\'' + x.cid + '\')">📞 전화</button>'
         + '<button class="btn btn-sm" onclick="agendaDone(\'' + x.cid + '\',\'' + s.sid + '\')">✅ 완료</button>'
+        + (isMissed ? '<button class="btn btn-sm" onclick="postponeSchedule(\'' + x.cid + '\',\'' + s.sid + '\')">📅 오늘로</button>' : '')
+        + (isMissed ? '<button class="btn btn-sm btn-danger" onclick="agendaDelete(\'' + x.cid + '\',\'' + s.sid + '\')">삭제</button>' : '')
       + '</div></div>';
   }
-  function grp(title, cls, items) {
+  function grp(title, cls, items, isMissed) {
     if (!items.length) return '';
     var h = '<div class="fu-tier ' + cls + '">' + title + ' · ' + items.length + '건</div>';
-    for (var k=0;k<items.length;k++) h += item(items[k]);
+    for (var k=0;k<items.length;k++) h += item(items[k], isMissed);
     return h;
   }
-  body.innerHTML = grp('오늘','red',g1) + grp('이번 주','orange',g2) + grp('이후','yellow',g3);
+  body.innerHTML =
+      grp('⚠️ 놓친 일정 (지난 미완료)','missed',missed,true)
+    + grp('오늘','red',g1,false)
+    + grp('이번 주','orange',g2,false)
+    + grp('이후','yellow',g3,false);
 }
 async function agendaDone(cid, sid) {
   var c = (state.customers||[]).find(function(x){ return x.id===cid; });
@@ -2346,6 +2370,24 @@ async function agendaDone(cid, sid) {
   renderSchedAgenda();
   render();
   await persistAll('✅ 완료 처리');
+}
+async function postponeSchedule(cid, sid) {
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.schedules) return;
+  var s = c.schedules.find(function(x){ return x.sid===sid; });
+  if (s) s.date = today();
+  renderSchedAgenda();
+  render();
+  await persistAll('📅 오늘로 미뤘어요');
+}
+async function agendaDelete(cid, sid) {
+  if (!confirm('이 일정을 삭제할까요?')) return;
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.schedules) return;
+  c.schedules = c.schedules.filter(function(x){ return x.sid!==sid; });
+  renderSchedAgenda();
+  render();
+  await persistAll('일정이 삭제됐어요');
 }
 
 function openTrash() {
@@ -2809,14 +2851,18 @@ function render() {
 
   if(state.filterStatus === 'all' && state.filterGrade === 'all') {
     var ups = upcomingSchedules();
-    if (ups.length) {
+    var missed = missedSchedules();
+    if (ups.length || missed.length) {
       var tstr = today(); var wkEnd = addDaysStr(tstr, 6);
       var tN = ups.filter(function(x){ return x.s.date===tstr; }).length;
       var wN = ups.filter(function(x){ return x.s.date<=wkEnd; }).length;
-      var lbl = tN>0 ? ('오늘 일정 '+tN+'건' + (wN>tN ? (' · 이번주 '+wN+'건') : ''))
-              : wN>0 ? ('이번주 일정 '+wN+'건')
-              : ('다가오는 일정 '+ups.length+'건');
-      html += `<div class="sched-alert-banner" onclick="openSchedAgenda()">📅 ${lbl} — 일정 보기</div>`;
+      var parts = [];
+      if (missed.length) parts.push('⚠️ 놓친 일정 '+missed.length+'건');
+      if (tN>0) parts.push('오늘 '+tN+'건');
+      if (wN>tN) parts.push('이번주 '+wN+'건');
+      if (parts.length===0) parts.push('다가오는 일정 '+ups.length+'건');
+      var sbCls = missed.length ? 'sched-alert-banner missed' : 'sched-alert-banner';
+      html += `<div class="${sbCls}" onclick="openSchedAgenda()">📅 ${parts.join(' · ')} — 일정 보기</div>`;
     }
   }
 

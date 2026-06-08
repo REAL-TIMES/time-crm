@@ -1358,7 +1358,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.10.0';
+const APP_VERSION = 'v2.10.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2159,7 +2159,7 @@ function followupCandidates() {
     var c = arr[i];
     if (c.deleted) continue;
     if (c.status === 'closed' || c.status === 'hold' || c.status === 'managing') continue;
-    if (c.type === 'seller' || c.type === 'landlord') continue;
+    if (c.type === 'seller' || c.type === 'landlord' || c.type === 'potential') continue;
     var days = c.lastContact ? Math.floor((Date.now() - new Date(c.lastContact)) / 86400000) : 99999;
     if (days >= 7) out.push({ c: c, days: days });
   }
@@ -2644,10 +2644,13 @@ function render() {
     </div>
   </div>`;
 
-  if(s.contactWarn > 0 && state.filterStatus === 'all' && state.filterGrade === 'all') {
-    html += `<div class="contact-alert-banner" onclick="state.filterStatus='contact_warn';render()">
-      📵 <strong>14일 이상</strong> 미연락 고객 <strong>${s.contactWarn}명</strong> — 클릭하여 확인
-    </div>`;
+  if(state.filterStatus === 'all' && state.filterGrade === 'all') {
+    var fuN = followupCandidates().length;
+    if (fuN > 0) {
+      html += `<div class="contact-alert-banner" onclick="openFollowup()">
+        🔄 다시 챙길 고객 <strong>${fuN}명</strong> — 팔로우업 점검 열기
+      </div>`;
+    }
   }
 
   // ── 고객 목록 ──

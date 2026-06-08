@@ -318,6 +318,15 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 /* Info Grid */
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .info-card { background: var(--bg3); border-radius: var(--radius-sm); padding: 10px 12px; }
+.sch-item{background:var(--bg3);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.sch-item.done{opacity:.55;}
+.sch-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.sch-type{font-weight:700;font-size:13px;color:var(--navy);background:#eef1f6;padding:2px 8px;border-radius:6px;}
+.sch-when{font-weight:600;font-size:13px;color:var(--text);}
+.sch-item.done .sch-when{text-decoration:line-through;}
+.sch-sub{font-size:12px;color:var(--text2);margin-top:4px;}
+.sch-btns{display:flex;gap:6px;margin-top:8px;}
+.sch-head{font-size:12px;font-weight:700;color:var(--text2);margin:8px 0 6px;}
 .info-lbl { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
 .info-val { font-size: 13px; font-weight: 600; color: var(--text); }
 .info-val.urgent { color: var(--red); }
@@ -1358,7 +1367,10 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.10.3';
+const SCHED_TYPES = ['상담','투어','통화','기타'];
+const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
+
+const APP_VERSION = 'v2.11.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2040,7 +2052,7 @@ function showToast(msg) {
 }
 
 function openAdd() {
-  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[]};
+  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[]};
   state.view = 'form';
   render();
 }
@@ -2058,6 +2070,7 @@ function openDetail(id) {
   state.activeTab = 'info';
   state.logText = ''; state.logDate = today(); state.logTopic = TOPICS[0];
   state.sendContent = ''; state.sendDate = today(); state.sendTopic = TOPICS[0];
+  state.schedDate = today(); state.schedTime = ''; state.schedType = '상담'; state.schedPlace = ''; state.schedMemo = '';
   state.view = 'detail';
   // 계약 draft 초기화
   const c = state.customers.find(x => x.id === id);
@@ -2294,6 +2307,42 @@ function addSend() {
   render();
 }
 
+// ── 일정(schedules) ──
+async function addSchedule() {
+  const c = state.customers.find(x=>x.id===state.selectedId);
+  if(!c) return;
+  if(!state.schedDate) { showToast('날짜를 입력해주세요'); return; }
+  c.schedules = c.schedules || [];
+  c.schedules.push({
+    sid: Date.now().toString(),
+    date: state.schedDate,
+    time: state.schedTime || '',
+    type: state.schedType || '상담',
+    place: (state.schedPlace || '').trim(),
+    memo: (state.schedMemo || '').trim(),
+    done: false
+  });
+  state.schedTime = ''; state.schedPlace = ''; state.schedMemo = '';
+  render();
+  await persistAll('📅 일정이 추가됐어요');
+}
+async function toggleSchedule(sid) {
+  const c = state.customers.find(x=>x.id===state.selectedId);
+  if(!c || !c.schedules) return;
+  const s = c.schedules.find(x=>x.sid===sid);
+  if(s) s.done = !s.done;
+  render();
+  await persistAll(s && s.done ? '✅ 완료 처리' : '↩️ 예정으로 되돌림');
+}
+async function deleteSchedule(sid) {
+  if(!confirm('이 일정을 삭제할까요?')) return;
+  const c = state.customers.find(x=>x.id===state.selectedId);
+  if(!c || !c.schedules) return;
+  c.schedules = c.schedules.filter(x=>x.sid!==sid);
+  render();
+  await persistAll('일정이 삭제됐어요');
+}
+
 function saveContract() {
   const c = state.customers.find(x => x.id === state.selectedId);
   if (!c) return;
@@ -2422,7 +2471,7 @@ function addVisit() {
   state.visitDong=''; state.visitHo=''; state.visitFloor='';
   state.visitStars=0; state.visitFeedback=''; state.visitRequest='';
   saveData();
-  showToast('임장 기록이 저장됐습니다 🏠');
+  showToast('투어 기록이 저장됐습니다 🏠');
   render();
 }
 
@@ -2447,7 +2496,7 @@ function saveEditLog(customerId, logIdx) {
 }
 
 function deleteVisit(customerId, visitId) {
-  if(!confirm('이 임장 기록을 삭제하시겠습니까?')) return;
+  if(!confirm('이 투어 기록을 삭제하시겠습니까?')) return;
   const c = state.customers.find(x=>x.id===customerId);
   if(!c) return;
   c.visits = (c.visits||[]).filter(v=>v.id!==visitId);
@@ -2706,7 +2755,7 @@ function render() {
           <button class="btn btn-sm" onclick="event.stopPropagation();openEdit('${c.id}')">✏️ 수정</button>
           <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteCustomer('${c.id}')">🗑 삭제</button>
           <div style="flex:1"></div>
-          <span style="font-size:10px;color:var(--text3)">${(c.contacts||[]).length}상담 · ${(c.visits||[]).length}임장</span>
+          <span style="font-size:10px;color:var(--text3)">${(c.contacts||[]).length}상담 · ${(c.visits||[]).length}투어</span>
         </div>
       </div>`;
     });
@@ -2881,6 +2930,46 @@ function render() {
           <div class="info-card"><div class="info-lbl">연락처</div><div class="info-val"><a href="tel:${sel.phone}" style="color:var(--blue);text-decoration:none">${sel.phone}</a></div></div>
         </div>
         ${sel.notes ? `<div class="notes-box">📝 ${sel.notes}</div>` : ''}`;
+    } else if(state.activeTab === 'sched') {
+      const allSch = (sel.schedules||[]);
+      const up = allSch.filter(s=>!s.done).slice().sort((a,b)=>((a.date||'')+(a.time||'')).localeCompare((b.date||'')+(b.time||'')));
+      const dn = allSch.filter(s=>s.done).slice().sort((a,b)=>((b.date||'')).localeCompare((a.date||'')));
+      const typeOpts = SCHED_TYPES.map(t=>`<option value="${t}"${(state.schedType||'상담')===t?' selected':''}>${SCHED_ICON[t]} ${t}</option>`).join('');
+      const schItem = (s)=>`
+        <div class="sch-item${s.done?' done':''}">
+          <div class="sch-main">
+            <span class="sch-type">${SCHED_ICON[s.type]||'📌'} ${s.type||''}</span>
+            <span class="sch-when">${fmtDateFull(s.date)}${s.time?' '+s.time:''}</span>
+          </div>
+          ${s.place?`<div class="sch-sub">📍 ${s.place}</div>`:''}
+          ${s.memo?`<div class="sch-sub">📝 ${s.memo}</div>`:''}
+          <div class="sch-btns">
+            <button class="btn btn-sm" onclick="toggleSchedule('${s.sid}')">${s.done?'↩️ 예정으로':'✅ 완료'}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSchedule('${s.sid}')">삭제</button>
+          </div>
+        </div>`;
+      tabBody = `
+        <div class="log-add">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">📅 일정 추가 (상담·투어·통화 약속)</div>
+          <div class="log-add-row">
+            <input class="form-input" type="date" value="${state.schedDate||today()}" onchange="state.schedDate=this.value" style="flex:0 0 138px">
+            <input class="form-input" type="time" value="${state.schedTime||''}" onchange="state.schedTime=this.value" style="flex:0 0 108px">
+            <select class="form-input" onchange="state.schedType=this.value" style="flex:1">${typeOpts}</select>
+          </div>
+          <div class="log-add-row">
+            <input class="form-input" placeholder="장소 (예: 원베일리 101동 / 사무실)" value="${(state.schedPlace||'').replace(/"/g,'&quot;')}" oninput="state.schedPlace=this.value" style="flex:1">
+          </div>
+          <div class="log-add-row">
+            <input class="form-input" placeholder="메모 (선택)" value="${(state.schedMemo||'').replace(/"/g,'&quot;')}" oninput="state.schedMemo=this.value" onkeydown="if(event.key==='Enter'){addSchedule();event.preventDefault()}" style="flex:1">
+            <button class="btn btn-primary btn-sm" onclick="addSchedule()">추가</button>
+          </div>
+        </div>
+        ${up.length?`<div class="sch-head">📌 다가오는 일정 ${up.length}</div>`:''}
+        ${up.map(schItem).join('')}
+        ${dn.length?`<div class="sch-head" style="margin-top:14px;color:var(--text3)">✅ 지난·완료 일정 ${dn.length}</div>`:''}
+        ${dn.map(schItem).join('')}
+        ${allSch.length===0?'<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">아직 잡힌 일정이 없습니다. 위에서 추가하세요.</div>':''}
+      `;
     } else if(state.activeTab === 'log') {
       const topicOpts = TOPICS.map(t=>`<option value="${t}"${state.logTopic===t?' selected':''}>${t}</option>`).join('');
       tabBody = `
@@ -3290,7 +3379,7 @@ function render() {
       ).join('');
       tabBody = `
         <div class="log-add">
-          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">🏠 임장 기록 추가</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">🏠 투어 기록 추가</div>
           <div class="log-add-row" style="flex-wrap:wrap;gap:6px;">
             <input class="form-input" type="date" value="${state.visitDate||today()}" onchange="state.visitDate=this.value" style="flex:0 0 130px">
             <input class="form-input" placeholder="건물명 / 단지명 *" value="${state.visitBuilding}" oninput="state.visitBuilding=this.value" style="flex:1;min-width:140px">
@@ -3309,10 +3398,10 @@ function render() {
           </div>
           <textarea class="form-input" placeholder="피드백 (고객 반응, 의견...)" oninput="state.visitFeedback=this.value" style="height:60px;margin-bottom:6px">${state.visitFeedback}</textarea>
           <textarea class="form-input" placeholder="추가 요청사항 (다음에 볼 조건, 희망 사항...)" oninput="state.visitRequest=this.value" style="height:50px;margin-bottom:8px">${state.visitRequest}</textarea>
-          <button class="btn btn-primary btn-sm" onclick="addVisit()" style="width:100%">임장 기록 저장</button>
+          <button class="btn btn-primary btn-sm" onclick="addVisit()" style="width:100%">투어 기록 저장</button>
         </div>
         ${visits.length === 0
-          ? '<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">임장 기록이 없습니다</div>'
+          ? '<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">투어 기록이 없습니다</div>'
           : visits.map(v => {
               const stars = [1,2,3,4,5].map(n=>`<span class="${v.stars>=n?'on':''}" style="font-size:16px;opacity:${v.stars>=n?'1':'0.2'}">⭐</span>`).join('');
               const metaItems = [
@@ -3367,9 +3456,10 @@ function render() {
         </div>
         <div class="tabs">
           <div class="tab${state.activeTab==='info'?' active':''}" onclick="state.activeTab='info';render()">기본정보</div>
+          <div class="tab${state.activeTab==='sched'?' active':''}" onclick="state.activeTab='sched';render()">📅 일정<span style="font-size:11px;margin-left:3px;color:var(--text3)">${(sel.schedules||[]).filter(s=>!s.done).length}</span></div>
           <div class="tab${state.activeTab==='contract'?' active':''}" onclick="state.activeTab='contract';render()">📝 계약${sel.contract&&sel.contract.contractDate?'<span style="font-size:10px;margin-left:3px;color:var(--gold)">●</span>':''}</div>
           <div class="tab${state.activeTab==='log'?' active':''}" onclick="state.activeTab='log';render()">상담기록<span style="font-size:11px;margin-left:3px;color:var(--text3)">${logs.length}</span></div>
-          <div class="tab${state.activeTab==='visit'?' active':''}" onclick="state.activeTab='visit';render()">임장기록<span style="font-size:11px;margin-left:3px;color:var(--text3)">${(sel.visits||[]).length}</span></div>
+          <div class="tab${state.activeTab==='visit'?' active':''}" onclick="state.activeTab='visit';render()">투어기록<span style="font-size:11px;margin-left:3px;color:var(--text3)">${(sel.visits||[]).length}</span></div>
           <div class="tab${state.activeTab==='send'?' active':''}" onclick="state.activeTab='send';render()">정보발송<span style="font-size:11px;margin-left:3px;color:var(--text3)">${sends.length}</span></div>
         </div>
         <div class="modal-body tab-body">${tabBody}</div>

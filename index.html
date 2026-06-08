@@ -1358,7 +1358,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.10.1';
+const APP_VERSION = 'v2.10.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2182,7 +2182,7 @@ function fuItemHtml(c, days) {
     + '<span class="fu-days">' + dayTxt + '</span></div>'
     + '<div class="fu-meta">' + typeLabel + (c.interest ? ' · ' + escapeHtmlT(c.interest) : '') + '</div>'
     + '<div class="fu-btns">'
-    + '<button class="b-call" onclick="fuAction(\'' + c.id + '\',\'contacted\')">📞 연락함</button>'
+    + '<button class="b-call" onclick="fuCall(\'' + c.id + '\')">📞 전화</button>'
     + '<button onclick="fuAction(\'' + c.id + '\',\'hold\')">⏸ 보류</button>'
     + '<button onclick="fuAction(\'' + c.id + '\',\'managing\')">🔁 관리</button>'
     + '<button onclick="fuAction(\'' + c.id + '\',\'closed\')">✅ 종료</button>'
@@ -2220,21 +2220,22 @@ function renderFollowup() {
 function openFollowup() { renderFollowup(); var m=document.getElementById('followup-modal'); if(m) m.classList.add('show'); }
 function closeFollowup() { var m=document.getElementById('followup-modal'); if(m) m.classList.remove('show'); }
 
+// 📞 전화 걸기 (기록은 수동) — 폰 전화앱 호출
+function fuCall(id) {
+  var c = (state.customers || []).find(function(x){ return x.id === id; });
+  if (!c) return;
+  var phone = (c.phone || '').replace(/[^0-9]/g, '');
+  if (!phone) { showToast('연락처가 없어요'); return; }
+  window.location.href = 'tel:' + phone;
+}
+
 async function fuAction(id, act) {
   var c = (state.customers || []).find(function(x){ return x.id === id; });
   if (!c) return;
   var msg = '';
-  if (act === 'contacted') {
-    var t = today();
-    c.lastContact = t;
-    if (!c.contacts) c.contacts = [];
-    c.contacts.unshift({ date: t, text: '팔로우업 연락', topic: '' });
-    var nd = new Date(); nd.setDate(nd.getDate() + 7);
-    c.nextFollowUp = nd.toISOString().slice(0,10);
-    msg = '📞 연락 처리 — 7일 후 다시 알림';
-  } else if (act === 'hold')     { c.status = 'hold';     msg = '⏸️ 보류로 변경'; }
-  else if (act === 'managing')   { c.status = 'managing'; msg = '🔁 관리로 변경'; }
-  else if (act === 'closed')     { c.status = 'closed';   msg = '✅ 종료로 변경'; }
+  if (act === 'hold')          { c.status = 'hold';     msg = '⏸️ 보류로 변경'; }
+  else if (act === 'managing') { c.status = 'managing'; msg = '🔁 관리로 변경'; }
+  else if (act === 'closed')   { c.status = 'closed';   msg = '✅ 종료로 변경'; }
   renderFollowup();
   render();
   await persistAll(msg);

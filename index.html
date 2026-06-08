@@ -1358,7 +1358,7 @@ const STATUS_ICON = {
   closed:      '✅',
 };
 
-const APP_VERSION = 'v2.10.2';
+const APP_VERSION = 'v2.10.3';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1396,7 +1396,7 @@ let state = {
   filterPropSub: 'all',
   showClosed: false,
   sidebarOpen: true,
-  sortBy: 'grade',
+  sortBy: 'registered',
   sortDir: 'desc',
   editingLogId: null,
   editingLogText: '',
@@ -2009,7 +2009,7 @@ function filtered() {
     const dir = state.sortDir === 'asc' ? 1 : -1;
     const GO = {S:0,A:1,B:2,C:3,D:4};
     switch (state.sortBy) {
-      case 'grade':        return ((GO[a.grade]??9) - (GO[b.grade]??9)) * dir;
+      case 'grade':        return ((GO[a.grade]??9) - (GO[b.grade]??9)) * (state.sortDir==='asc' ? -1 : 1);
       case 'lastContact':  return ((a.lastContact?new Date(a.lastContact):new Date(0)) - (b.lastContact?new Date(b.lastContact):new Date(0))) * dir;
       case 'registered':   return ((parseInt(a.id)||0) - (parseInt(b.id)||0)) * dir;
       case 'name':         return a.name.localeCompare(b.name, 'ko') * dir;
@@ -2630,11 +2630,10 @@ function render() {
     <div style="display:flex;gap:4px;align-items:center;flex:1;justify-content:flex-end;flex-wrap:wrap;">
       <select style="padding:4px 7px;font-size:11px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text);cursor:pointer;font-family:inherit;"
         onchange="state.sortBy=this.value;render()">
-        <option value="grade"${state.sortBy==='grade'?' selected':''}>등급순</option>
-        <option value="lastContact"${state.sortBy==='lastContact'?' selected':''}>상담일순</option>
         <option value="registered"${state.sortBy==='registered'?' selected':''}>접수일순</option>
+        <option value="grade"${state.sortBy==='grade'?' selected':''}>등급순</option>
+        <option value="elapsed"${state.sortBy==='elapsed'?' selected':''}>상담 경과순</option>
         <option value="leaseExpiry"${state.sortBy==='leaseExpiry'?' selected':''}>만기일순</option>
-        <option value="elapsed"${state.sortBy==='elapsed'?' selected':''}>경과일순</option>
         <option value="name"${state.sortBy==='name'?' selected':''}>이름순</option>
       </select>
       <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()"

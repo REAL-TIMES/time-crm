@@ -481,6 +481,15 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 /* ── 상담 요주의 알림 배너 ── */
 .contact-alert-banner { margin: 0 16px 8px; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; background: #fef0ef; border: 1px solid #fcd9d7; color: #c0392b; }
 .contact-alert-banner:hover { opacity: 0.85; }
+.sched-alert-banner{margin:0 16px 8px;padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer;background:#eaf2fb;border:1px solid #c9dcf3;color:#1c4e8a;}
+.sched-alert-banner:hover{opacity:.85;}
+#sched-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
+#sched-modal.show{display:flex;}
+@media(min-width:600px){#sched-modal{align-items:center;padding:20px;}}
+.ag-item{background:var(--bg3);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.ag-when{font-size:12px;font-weight:700;color:#1c4e8a;margin-bottom:5px;}
+.ag-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ag-name{font-weight:700;color:#13294B;cursor:pointer;text-decoration:underline;}
 
 /* ── FAB */
 .fab { position: fixed; bottom: 24px; right: 20px; width: 52px; height: 52px; background: var(--navy); color: var(--gold); border: none; border-radius: 50%; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(26,26,46,0.4); z-index: 40; transition: all 0.2s; }
@@ -780,6 +789,13 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
     <div class="fu-head"><div class="fu-title">🔄 팔로우업 점검</div><button class="qa-x" onclick="closeFollowup()">✕</button></div>
     <div class="fu-sub">한동안 챙기지 못한 고객이에요. 매도·임대·종료·보류·관리 고객은 빼고, 오래된 순으로 보여드려요. 행동하면 목록에서 빠지고, 다시 시간이 지나면 올라와요.</div>
     <div id="fu-body"></div>
+  </div>
+</div>
+<div id="sched-modal">
+  <div class="fu-box">
+    <div class="fu-head"><div class="fu-title">📅 다가오는 일정</div><button class="qa-x" onclick="closeSchedAgenda()">✕</button></div>
+    <div class="fu-sub">완료하지 않은 앞으로의 일정이에요. 오늘 → 이번 주 → 이후 순으로 보여드려요.</div>
+    <div id="sched-agenda-body"></div>
   </div>
 </div>
 <div class="app" id="app"></div>
@@ -1370,7 +1386,7 @@ const STATUS_ICON = {
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
 
-const APP_VERSION = 'v2.11.2';
+const APP_VERSION = 'v2.12.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2254,6 +2270,84 @@ async function fuAction(id, act) {
   await persistAll(msg);
 }
 
+// ════════════════════════════════════════
+//  📅 다가오는 일정 (모아보기)
+// ════════════════════════════════════════
+function addDaysStr(base, n) {
+  var p = base.split('-');
+  var d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+  d.setDate(d.getDate() + n);
+  var y=d.getFullYear(), m=d.getMonth()+1, dd=d.getDate();
+  return y + '-' + (m<10?'0'+m:m) + '-' + (dd<10?'0'+dd:dd);
+}
+function toAmPm(t) {
+  if (!t || t.indexOf(':') < 0) return t || '';
+  var p = t.split(':'); var H = parseInt(p[0],10);
+  var ap = H < 12 ? '오전' : '오후'; var h12 = H % 12; if (h12 === 0) h12 = 12;
+  return ap + ' ' + h12 + ':' + p[1];
+}
+function upcomingSchedules() {
+  var t = today(); var out = [];
+  var arr = state.customers || [];
+  for (var i=0;i<arr.length;i++) {
+    var c = arr[i]; if (c.deleted) continue;
+    var sch = c.schedules || [];
+    for (var j=0;j<sch.length;j++) {
+      var s = sch[j];
+      if (s.done || !s.date || s.date < t) continue;
+      out.push({ cid:c.id, cname:c.name, cphone:c.phone, s:s });
+    }
+  }
+  out.sort(function(a,b){ return ((a.s.date+(a.s.time||''))).localeCompare(b.s.date+(b.s.time||'')); });
+  return out;
+}
+function openSchedAgenda() { renderSchedAgenda(); var m=document.getElementById('sched-modal'); if(m) m.classList.add('show'); }
+function closeSchedAgenda() { var m=document.getElementById('sched-modal'); if(m) m.classList.remove('show'); }
+function renderSchedAgenda() {
+  var body = document.getElementById('sched-agenda-body'); if (!body) return;
+  var ups = upcomingSchedules();
+  if (!ups.length) { body.innerHTML = '<div class="fu-empty">다가오는 일정이 없어요.</div>'; return; }
+  var t = today(); var wkEnd = addDaysStr(t, 6);
+  var g1=[], g2=[], g3=[];
+  for (var i=0;i<ups.length;i++) {
+    var d = ups[i].s.date;
+    if (d === t) g1.push(ups[i]);
+    else if (d <= wkEnd) g2.push(ups[i]);
+    else g3.push(ups[i]);
+  }
+  function item(x) {
+    var s = x.s;
+    return '<div class="ag-item">'
+      + '<div class="ag-when">' + fmtDateFull(s.date) + (s.time ? ' · ' + toAmPm(s.time) : '') + '</div>'
+      + '<div class="ag-row">'
+        + '<span class="sch-type">' + (SCHED_ICON[s.type]||'📌') + ' ' + (s.type||'') + '</span>'
+        + '<span class="ag-name" onclick="closeSchedAgenda();openDetail(\'' + x.cid + '\')">' + escapeHtmlT(x.cname||'(이름없음)') + '</span>'
+      + '</div>'
+      + (s.place ? '<div class="sch-sub">📍 ' + escapeHtmlT(s.place) + '</div>' : '')
+      + (s.memo ? '<div class="sch-sub">📝 ' + escapeHtmlT(s.memo) + '</div>' : '')
+      + '<div class="sch-btns">'
+        + '<button class="btn btn-sm b-call" onclick="fuCall(\'' + x.cid + '\')">📞 전화</button>'
+        + '<button class="btn btn-sm" onclick="agendaDone(\'' + x.cid + '\',\'' + s.sid + '\')">✅ 완료</button>'
+      + '</div></div>';
+  }
+  function grp(title, cls, items) {
+    if (!items.length) return '';
+    var h = '<div class="fu-tier ' + cls + '">' + title + ' · ' + items.length + '건</div>';
+    for (var k=0;k<items.length;k++) h += item(items[k]);
+    return h;
+  }
+  body.innerHTML = grp('오늘','red',g1) + grp('이번 주','orange',g2) + grp('이후','yellow',g3);
+}
+async function agendaDone(cid, sid) {
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.schedules) return;
+  var s = c.schedules.find(function(x){ return x.sid===sid; });
+  if (s) s.done = true;
+  renderSchedAgenda();
+  render();
+  await persistAll('✅ 완료 처리');
+}
+
 function openTrash() {
   renderTrash();
   var m = document.getElementById('trash-modal'); if (m) m.classList.add('show');
@@ -2712,6 +2806,19 @@ function render() {
       <button class="btn btn-sm btn-primary" onclick="openAdd()">+ 추가</button>
     </div>
   </div>`;
+
+  if(state.filterStatus === 'all' && state.filterGrade === 'all') {
+    var ups = upcomingSchedules();
+    if (ups.length) {
+      var tstr = today(); var wkEnd = addDaysStr(tstr, 6);
+      var tN = ups.filter(function(x){ return x.s.date===tstr; }).length;
+      var wN = ups.filter(function(x){ return x.s.date<=wkEnd; }).length;
+      var lbl = tN>0 ? ('오늘 일정 '+tN+'건' + (wN>tN ? (' · 이번주 '+wN+'건') : ''))
+              : wN>0 ? ('이번주 일정 '+wN+'건')
+              : ('다가오는 일정 '+ups.length+'건');
+      html += `<div class="sched-alert-banner" onclick="openSchedAgenda()">📅 ${lbl} — 일정 보기</div>`;
+    }
+  }
 
   if(state.filterStatus === 'all' && state.filterGrade === 'all') {
     var fuN = followupCandidates().length;

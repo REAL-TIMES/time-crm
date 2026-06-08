@@ -1388,7 +1388,24 @@ const STATUS_ICON = {
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
 
-const APP_VERSION = 'v2.12.2';
+// ── 난이도(집중도): 매수·임차 고객의 '오늘의 집중' 선별용 ──
+const DIFF = { hard:{label:'🎯 어려움'}, mid:{label:'🟡 보통'}, easy:{label:'⚡ 쉬움'} };
+function autoDifficulty(propMain, type) {
+  if (type !== 'buyer' && type !== 'tenant') return null; // 매수·임차만
+  if (!propMain) return null; // 매물유형 없으면 분류 불가
+  if (type === 'buyer') {
+    return propMain === 'apt' ? 'mid' : 'hard'; // 아파트 매수만 보통, 나머지 매수 어려움
+  }
+  // 임차
+  if (propMain==='building' || propMain==='house' || propMain==='commercial' || propMain==='land' || propMain==='rebuild') return 'mid';
+  return 'easy'; // 고급빌라·오피스텔·아파트 임차
+}
+function effectiveDifficulty(c) {
+  if (c.difficulty === 'hard' || c.difficulty === 'mid' || c.difficulty === 'easy') return c.difficulty;
+  return autoDifficulty(c.propMain, c.type);
+}
+
+const APP_VERSION = 'v2.13.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2070,7 +2087,7 @@ function showToast(msg) {
 }
 
 function openAdd() {
-  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[]};
+  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:''};
   state.view = 'form';
   render();
 }
@@ -3067,6 +3084,17 @@ function render() {
                 <option value="">소분류 선택</option>
                 ${PROP_SUB[d.propMain].map(s=>`<option value="${s}"${(d.propSub||'')=== s?' selected':''}>${s}</option>`).join('')}
               </select>
+            </div>` : ''}
+            ${(d.type==='buyer'||d.type==='tenant') ? `
+            <div class="form-group full">
+              <label class="form-label">난이도 (오늘의 집중 선별용)</label>
+              <select class="form-input" onchange="state.editData.difficulty=this.value">
+                <option value="">자동 — ${(function(){var ad=autoDifficulty(d.propMain,d.type);return ad?DIFF[ad].label:'매물유형 입력 시 분류';})()}</option>
+                <option value="hard"${d.difficulty==='hard'?' selected':''}>🎯 어려움</option>
+                <option value="mid"${d.difficulty==='mid'?' selected':''}>🟡 보통</option>
+                <option value="easy"${d.difficulty==='easy'?' selected':''}>⚡ 쉬움</option>
+              </select>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">자동은 매물유형+거래로 계산돼요. 다르게 보고 싶으면 직접 고르세요.</div>
             </div>` : ''}
             <div class="form-group full">
               <label class="form-label">관심 매물 (단지명·평형 등)</label>

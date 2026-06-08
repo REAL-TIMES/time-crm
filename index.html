@@ -1370,7 +1370,7 @@ const STATUS_ICON = {
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
 
-const APP_VERSION = 'v2.11.0';
+const APP_VERSION = 'v2.11.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2953,7 +2953,7 @@ function render() {
           <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">📅 일정 추가 (상담·투어·통화 약속)</div>
           <div class="log-add-row">
             <input class="form-input" type="date" value="${state.schedDate||today()}" onchange="state.schedDate=this.value" style="flex:0 0 138px">
-            <input class="form-input" type="time" value="${state.schedTime||''}" onchange="state.schedTime=this.value" style="flex:0 0 108px">
+            <input class="form-input" type="time" step="600" value="${state.schedTime||''}" onchange="state.schedTime=this.value" style="flex:0 0 108px">
             <select class="form-input" onchange="state.schedType=this.value" style="flex:1">${typeOpts}</select>
           </div>
           <div class="log-add-row">

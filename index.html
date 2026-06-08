@@ -1405,7 +1405,10 @@ function effectiveDifficulty(c) {
   return autoDifficulty(c.propMain, c.type);
 }
 
-const APP_VERSION = 'v2.13.0';
+// ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
+const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
+
+const APP_VERSION = 'v2.13.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2087,7 +2090,7 @@ function showToast(msg) {
 }
 
 function openAdd() {
-  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:''};
+  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:''};
   state.view = 'form';
   render();
 }
@@ -3095,6 +3098,14 @@ function render() {
                 <option value="easy"${d.difficulty==='easy'?' selected':''}>⚡ 쉬움</option>
               </select>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">자동은 매물유형+거래로 계산돼요. 다르게 보고 싶으면 직접 고르세요.</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">입주·거래 희망 시기 (시급성)</label>
+              <select class="form-input" onchange="state.editData.moveTiming=this.value">
+                <option value="">미입력</option>
+                ${TIMING_OPTS.map(t=>`<option value="${t}"${(d.moveTiming||'')===t?' selected':''}>${t}</option>`).join('')}
+              </select>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">'즉시'에 가까울수록 '오늘의 집중'에서 위로 올라와요.</div>
             </div>` : ''}
             <div class="form-group full">
               <label class="form-label">관심 매물 (단지명·평형 등)</label>

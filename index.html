@@ -1388,7 +1388,7 @@ const STATUS_ICON = {
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
 
-const APP_VERSION = 'v2.12.1';
+const APP_VERSION = 'v2.12.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2288,6 +2288,36 @@ function toAmPm(t) {
   var ap = H < 12 ? '오전' : '오후'; var h12 = H % 12; if (h12 === 0) h12 = 12;
   return ap + ' ' + h12 + ':' + p[1];
 }
+// 구글 캘린더 '일정 추가' 링크 생성 (방법 A: 클릭 한 번, 자동 아님)
+function gcalDates(s) {
+  if (s.time) {
+    var p = s.time.split(':');
+    var H = parseInt(p[0],10), M = p[1] || '00';
+    var endH = H + 1, endM = M;
+    if (endH > 23) { endH = 23; endM = '59'; }
+    var dd = s.date.replace(/-/g,'');
+    var ehs = (endH < 10 ? '0'+endH : ''+endH);
+    return dd + 'T' + p[0] + M + '00/' + dd + 'T' + ehs + endM + '00';
+  }
+  return s.date.replace(/-/g,'') + '/' + addDaysStr(s.date, 1).replace(/-/g,'');
+}
+function gcalUrl(s, cname) {
+  var title = (s.type ? s.type + ' · ' : '') + (cname || '고객');
+  var url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + '&text=' + encodeURIComponent(title)
+    + '&dates=' + gcalDates(s)
+    + '&ctz=Asia/Seoul';
+  if (s.place) url += '&location=' + encodeURIComponent(s.place);
+  if (s.memo)  url += '&details='  + encodeURIComponent(s.memo);
+  return url;
+}
+function openGcal(cid, sid) {
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.schedules) return;
+  var s = c.schedules.find(function(x){ return x.sid===sid; });
+  if (!s) return;
+  window.open(gcalUrl(s, c.name), '_blank');
+}
 function upcomingSchedules() {
   var t = today(); var out = [];
   var arr = state.customers || [];
@@ -2346,6 +2376,7 @@ function renderSchedAgenda() {
       + '<div class="sch-btns">'
         + '<button class="btn btn-sm b-call" onclick="fuCall(\'' + x.cid + '\')">📞 전화</button>'
         + '<button class="btn btn-sm" onclick="agendaDone(\'' + x.cid + '\',\'' + s.sid + '\')">✅ 완료</button>'
+        + '<button class="btn btn-sm" onclick="openGcal(\'' + x.cid + '\',\'' + s.sid + '\')">📅 캘린더</button>'
         + (isMissed ? '<button class="btn btn-sm" onclick="postponeSchedule(\'' + x.cid + '\',\'' + s.sid + '\')">📅 오늘로</button>' : '')
         + (isMissed ? '<button class="btn btn-sm btn-danger" onclick="agendaDelete(\'' + x.cid + '\',\'' + s.sid + '\')">삭제</button>' : '')
       + '</div></div>';
@@ -3121,6 +3152,7 @@ function render() {
           ${s.memo?`<div class="sch-sub">📝 ${s.memo}</div>`:''}
           <div class="sch-btns">
             <button class="btn btn-sm" onclick="toggleSchedule('${s.sid}')">${s.done?'↩️ 예정으로':'✅ 완료'}</button>
+            <button class="btn btn-sm" onclick="openGcal('${sel.id}','${s.sid}')">📅 캘린더</button>
             <button class="btn btn-sm btn-danger" onclick="deleteSchedule('${s.sid}')">삭제</button>
           </div>
         </div>`;

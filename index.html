@@ -489,6 +489,36 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .sched-alert-banner:hover{opacity:.85;}
 .sched-alert-banner.missed{background:#fdecea;border-color:#f4c7c1;color:#b03a2e;}
 .focus-banner{margin:0 16px 8px;padding:11px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px;cursor:pointer;background:#13294B;color:#C9A24B;border:1px solid #0c1c38;letter-spacing:.2px;}
+.dashboard-wrap{max-width:1180px;margin:0 auto;padding:16px 18px 60px;height:calc(100vh - 44px);height:calc(100dvh - 44px);overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.db-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.db-title{font-size:18px;font-weight:800;color:#13294B;}
+.db-tolist{padding:9px 14px;border:1px solid #13294B;background:#fff;color:#13294B;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.db-tolist:hover{background:#13294B;color:#fff;}
+.db-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+@media(max-width:1024px){.db-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.db-grid{grid-template-columns:1fr;}.dashboard-wrap{padding:14px 14px calc(60px + env(safe-area-inset-bottom,0px));}}
+.db-card{background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(20,30,50,.04);}
+.db-card.db-focus{border-color:#C9A24B;box-shadow:0 2px 10px rgba(201,162,75,.12);}
+.db-card-h{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:#13294B;margin-bottom:8px;}
+.db-open{padding:5px 10px;border:1px solid #d5dae2;background:#f6f7f9;color:#33405a;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.db-open:hover{background:#eceef2;}
+.db-sub{font-size:11px;font-weight:700;color:#8a93a2;margin:8px 0 4px;}
+.db-row{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:8px;cursor:pointer;font-size:12.5px;}
+.db-row:hover{background:#f6f7f9;}
+.db-grade{flex-shrink:0;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;}
+.db-rowname{flex:1;min-width:0;font-weight:700;color:#222a35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.db-rowmeta{flex-shrink:0;font-size:11.5px;color:#8a93a2;font-weight:600;}
+.db-call{flex-shrink:0;border:none;background:#13294B;color:#fff;border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;font-family:inherit;}
+.db-empty{padding:16px 4px;text-align:center;color:#9aa3b2;font-size:12.5px;line-height:1.6;}
+.db-stat-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+.db-pill{padding:4px 10px;border-radius:20px;background:#eef1f6;color:#33405a;font-size:11.5px;font-weight:700;}
+.db-pill.db-red{background:#fdecea;color:#b03a2e;}
+.db-big{font-size:26px;font-weight:800;color:#13294B;margin:2px 0 6px;}
+.db-big span{font-size:13px;font-weight:600;color:#8a93a2;margin-left:6px;}
+.db-num-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:4px;}
+.db-num{background:#f6f7f9;border-radius:9px;padding:8px 4px;text-align:center;}
+.db-num-v{font-size:17px;font-weight:800;color:#13294B;}
+.db-num-l{font-size:10.5px;color:#8a93a2;font-weight:600;margin-top:1px;}
 .focus-banner:hover{opacity:.9;}
 .foc-score{flex-shrink:0;font-size:12px;font-weight:800;color:#13294B;background:#eef1f6;padding:2px 8px;border-radius:8px;}
 #focus-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
@@ -1432,7 +1462,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.15.3';
+const APP_VERSION = 'v2.16.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1460,7 +1490,7 @@ function propMainIcon(key)  { return PROP_MAIN.find(x=>x.key===key)?.icon  || ''
 
 let state = {
   customers: [],
-  view: 'list', // list | form | detail
+  view: (typeof window !== 'undefined' && window.innerWidth > 768) ? 'dashboard' : 'list', // dashboard | list | form | detail
   selectedId: null,
   editData: null,
   filterGrade: 'all',
@@ -2993,6 +3023,104 @@ function searchClear() {
   if (el) el.focus();
 }
 
+function renderDashboard(s) {
+  var custs = (state.customers||[]).filter(function(x){ return !x.deleted; });
+  var buyer = custs.filter(function(x){ return x.type==='buyer'; }).length;
+  var tenant = custs.filter(function(x){ return x.type==='tenant'; }).length;
+  var seller = custs.filter(function(x){ return x.type==='seller'; }).length;
+  var landlord = custs.filter(function(x){ return x.type==='landlord'; }).length;
+
+  var fp = focusPools();
+  var ups = upcomingSchedules();
+  var missed = missedSchedules();
+  var fu = followupCandidates();
+  var t = today(); var wkEnd = addDaysStr(t,6);
+  var todayN = ups.filter(function(x){ return x.s.date===t; }).length;
+  var weekN = ups.filter(function(x){ return x.s.date<=wkEnd; }).length;
+
+  function nameRow(c, metaHtml) {
+    return '<div class="db-row" onclick="openDetail(\'' + c.id + '\')">'
+      + '<span class="db-grade" style="background:' + gradeColor(c.grade||'') + '">' + (c.grade||'-') + '</span>'
+      + '<span class="db-rowname">' + escapeHtmlT(c.name||'(이름없음)') + '</span>'
+      + metaHtml + '</div>';
+  }
+
+  // 🎯 오늘의 집중
+  var focusCard = '<div class="db-card db-focus"><div class="db-card-h"><span>🎯 오늘의 집중</span><button class="db-open" onclick="openFocus()">열기</button></div>';
+  if (fp.vip.length || fp.quick.length) {
+    if (fp.vip.length) { focusCard += '<div class="db-sub">VIP · 큰 건</div>'; fp.vip.forEach(function(c){
+      focusCard += '<div class="db-row" onclick="openDetail(\'' + c.id + '\')">'
+        + '<span class="db-grade" style="background:' + gradeColor(c.grade||'') + '">' + (c.grade||'-') + '</span>'
+        + '<span class="db-rowname">' + escapeHtmlT(c.name||'') + '</span>'
+        + '<span class="db-rowmeta">' + focusScore(c) + '점</span>'
+        + '<button class="db-call" onclick="event.stopPropagation();fuCall(\'' + c.id + '\')">📞</button></div>';
+    }); }
+    if (fp.quick.length) { focusCard += '<div class="db-sub">QUICK · 빨리 칠 것</div>'; fp.quick.forEach(function(c){
+      focusCard += '<div class="db-row" onclick="openDetail(\'' + c.id + '\')">'
+        + '<span class="db-grade" style="background:' + gradeColor(c.grade||'') + '">' + (c.grade||'-') + '</span>'
+        + '<span class="db-rowname">' + escapeHtmlT(c.name||'') + '</span>'
+        + '<span class="db-rowmeta">' + focusScore(c) + '점</span>'
+        + '<button class="db-call" onclick="event.stopPropagation();fuCall(\'' + c.id + '\')">📞</button></div>';
+    }); }
+  } else { focusCard += '<div class="db-empty">집중할 매수·임차 고객이 없어요</div>'; }
+  focusCard += '</div>';
+
+  // 📅 일정
+  var schedCard = '<div class="db-card"><div class="db-card-h"><span>📅 일정</span><button class="db-open" onclick="openSchedAgenda()">열기</button></div>'
+    + '<div class="db-stat-row">'
+      + (missed.length ? '<span class="db-pill db-red">놓침 ' + missed.length + '</span>' : '')
+      + '<span class="db-pill">오늘 ' + todayN + '</span>'
+      + '<span class="db-pill">이번주 ' + weekN + '</span>'
+    + '</div>';
+  var upTop = ups.slice(0,4);
+  if (upTop.length) {
+    upTop.forEach(function(x){
+      schedCard += '<div class="db-row"><span class="db-rowmeta" style="min-width:120px;text-align:left">' + fmtDateFull(x.s.date) + (x.s.time ? ' ' + toAmPm(x.s.time) : '') + '</span>'
+        + '<span class="db-rowname">' + (SCHED_ICON[x.s.type]||'📌') + ' ' + escapeHtmlT(x.cname||'') + '</span></div>';
+    });
+  } else { schedCard += '<div class="db-empty">예정된 일정이 없어요</div>'; }
+  schedCard += '</div>';
+
+  // 🔄 팔로우업
+  var fuCard = '<div class="db-card"><div class="db-card-h"><span>🔄 팔로우업</span><button class="db-open" onclick="openFollowup()">열기</button></div>';
+  if (fu.length) {
+    fuCard += '<div class="db-big">' + fu.length + '<span>명 다시 챙기기</span></div>';
+    fu.slice(0,5).forEach(function(it){ fuCard += nameRow(it.c, '<span class="db-rowmeta">' + it.days + '일</span>'); });
+  } else { fuCard += '<div class="db-empty">모두 최근에 챙기셨어요 👍</div>'; }
+  fuCard += '</div>';
+
+  // 📊 숫자 요약
+  function numCell(label,val){ return '<div class="db-num"><div class="db-num-v">' + val + '</div><div class="db-num-l">' + label + '</div></div>'; }
+  var numCard = '<div class="db-card"><div class="db-card-h"><span>📊 숫자 요약</span></div>'
+    + '<div class="db-num-grid">' + numCell('전체', s.total) + numCell('매수', buyer) + numCell('임차', tenant) + numCell('매도', seller) + numCell('임대', landlord) + '</div>'
+    + '<div class="db-sub">등급</div>'
+    + '<div class="db-num-grid">' + numCell('S', s.S) + numCell('A', s.A) + numCell('B', s.B) + numCell('C', s.C) + numCell('D', s.D) + '</div>'
+    + '<div class="db-sub">진행</div>'
+    + '<div class="db-stat-row"><span class="db-pill">계약 ' + s.contracting + '</span><span class="db-pill">보류 ' + s.hold + '</span><span class="db-pill">종료 ' + s.closed + '</span></div>'
+    + '</div>';
+
+  // 🗑 정리 후보
+  var cleanCard = '<div class="db-card"><div class="db-card-h"><span>🗑 정리 후보</span><button class="db-open" onclick="openFocus()">열기</button></div>';
+  if (fp.cleanup.length) {
+    fp.cleanup.slice(0,6).forEach(function(it){ cleanCard += nameRow(it.c, '<span class="db-rowmeta">' + it.tier.label + '</span>'); });
+  } else { cleanCard += '<div class="db-empty">정리할 고객이 없어요</div>'; }
+  cleanCard += '</div>';
+
+  // ⏰ 만기 임박
+  function expRow(label,val,key){ return '<div class="db-row" onclick="state.filterStatus=\'' + key + '\';state.view=\'list\';render()"><span class="db-rowname">' + label + '</span><span class="db-rowmeta">' + val + '명</span></div>'; }
+  var expCard = '<div class="db-card"><div class="db-card-h"><span>⏰ 만기 임박 (매도·임대)</span></div>'
+    + expRow('30일 내', s.urgent, 'urgent_exp')
+    + expRow('3개월 내', s.soon, 'soon_exp')
+    + expRow('6개월 내', s.watch, 'watch_exp')
+    + '</div>';
+
+  return '<div class="dashboard-wrap">'
+    + '<div class="db-top"><div class="db-title">📊 현황 대시보드</div>'
+    + '<button class="db-tolist" onclick="state.view=\'list\';render()">전체 고객 목록 보기 →</button></div>'
+    + '<div class="db-grid">' + focusCard + schedCard + fuCard + numCard + cleanCard + expCard + '</div>'
+    + '</div>';
+}
+
 function render() {
   const app = document.getElementById('app');
   const s = stats();
@@ -3013,6 +3141,7 @@ function render() {
       <span class="hdr-more-wrap">
         <button class="btn btn-ghost" onclick="toggleHeaderMenu(event)" title="더보기">⋯</button>
         <div class="hdr-menu" id="hdr-menu">
+          <button class="hdr-item" onclick="closeHeaderMenu();state.view='dashboard';render()">📊 대시보드</button>
           <button class="hdr-item" onclick="closeHeaderMenu();openFocus()">🎯 오늘의 집중${(function(){var p=focusPools();var n=p.vip.length+p.quick.length;return n?' ('+n+')':'';})()}</button>
           <button class="hdr-item" onclick="closeHeaderMenu();openFollowup()">🔄 팔로우업 점검${(function(){var n=followupCandidates().length;return n?' ('+n+')':'';})()}</button>
           <button class="hdr-item" onclick="closeHeaderMenu();openTrash()">🗑 휴지통${(function(){var n=(state.customers||[]).filter(function(c){return c.deleted;}).length;return n?' ('+n+')':'';})()}</button>
@@ -3025,6 +3154,12 @@ function render() {
       <button class="btn btn-ghost" onclick="logout()" title="로그아웃">🚪</button>
     </div>
   </div>`;
+
+  if (state.view === 'dashboard') {
+    html += renderDashboard(s);
+    app.innerHTML = html;
+    return;
+  }
 
   html += `<div class="sidebar-overlay${state.sidebarOpen?' show':''}" onclick="state.sidebarOpen=false;render()"></div>`;
   html += `<div class="body-wrap">`;

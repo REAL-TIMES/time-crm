@@ -463,6 +463,8 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .visit-section-label { font-size: 11px; font-weight: 700; color: var(--text3); margin-bottom: 4px; letter-spacing: 0.3px; }
 .visit-text { font-size: 12px; color: var(--text2); line-height: 1.6; white-space: pre-wrap; background: var(--bg2); border-radius: 6px; padding: 8px 10px; }
 .visit-del-btn { position: absolute; top: 10px; right: 10px; font-size: 11px; padding: 3px 7px; }
+.visit-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
+.visit-act-btn { font-size: 11px; padding: 4px 11px; }
 .star-input { display: flex; gap: 4px; margin: 6px 0; }
 .star-input span { font-size: 24px; cursor: pointer; opacity: 0.3; transition: opacity 0.1s; user-select: none; }
 .star-input span.on { opacity: 1; }
@@ -1430,7 +1432,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.15.2';
+const APP_VERSION = 'v2.15.3';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1519,13 +1521,30 @@ function saveData() {
   } catch(e) {}
 }
 
+// 마지막 접점일: 상담·투어·정보발송 + lastContact 중 가장 최근 (YYYY-MM-DD 문자열 비교)
+function lastTouchDate(c) {
+  var dates = [];
+  if (c.lastContact) dates.push(c.lastContact);
+  var add = function(arr){ if(arr){ for(var i=0;i<arr.length;i++){ if(arr[i] && arr[i].date) dates.push(arr[i].date); } } };
+  add(c.contacts); add(c.visits); add(c.sends);
+  if (!dates.length) return null;
+  dates.sort();
+  return dates[dates.length - 1];
+}
+function daysSinceTouch(c) {
+  var d = lastTouchDate(c);
+  if (!d) return 99999;
+  return Math.floor((Date.now() - new Date(d)) / 86400000);
+}
+
 // 상담 경과일 계산 (계약·종료 제외)
 const SKIP_ELAPSED = new Set(['contracting', 'closed']);
 
 function contactElapsedInfo(c) {
   if (SKIP_ELAPSED.has(c.status || 'received')) return null;
-  if (!c.lastContact) return { days: null, cls: 'elapsed-normal', label: '연락 기록 없음', pct: 100 };
-  const days = Math.floor((Date.now() - new Date(c.lastContact)) / 86400000);
+  const lt = lastTouchDate(c);
+  if (!lt) return { days: null, cls: 'elapsed-normal', label: '연락 기록 없음', pct: 100 };
+  const days = Math.floor((Date.now() - new Date(lt)) / 86400000);
   if (days <= 7)  return { days, cls: 'elapsed-fresh',  label: `${days}일 경과`, pct: Math.min(days/30*100, 100) };
   if (days <= 14) return { days, cls: 'elapsed-normal', label: `${days}일 경과`, pct: Math.min(days/30*100, 100) };
   if (days <= 30) return { days, cls: 'elapsed-warn',   label: `${days}일 경과 ⚠️`, pct: Math.min(days/30*100, 100) };
@@ -2035,8 +2054,7 @@ function stats() {
     partner: c.filter(x=>TYPE_IS_PARTNER(x.type)).length,
     contactWarn: c.filter(x => {
       if (SKIP_ELAPSED.has(x.status||'received')) return false;
-      if (!x.lastContact) return true;
-      return Math.floor((Date.now() - new Date(x.lastContact)) / 86400000) > 14;
+      return daysSinceTouch(x) > 14;
     }).length,
     prop: propCounts,
   };
@@ -2064,8 +2082,7 @@ function filtered() {
       const d = daysTo(c.leaseExpiry); if (!(d !== null && d > 90 && d <= 180)) return false;
     } else if (state.filterStatus === 'contact_warn') {
       if (SKIP_ELAPSED.has(c.status||'received')) return false;
-      const days = c.lastContact ? Math.floor((Date.now()-new Date(c.lastContact))/86400000) : 999;
-      if (days <= 14) return false;
+      if (daysSinceTouch(c) <= 14) return false;
     } else if (state.filterStatus !== 'all') {
       if ((c.status||'received') !== state.filterStatus) return false;
     }
@@ -2229,7 +2246,7 @@ function followupCandidates() {
     if (c.deleted) continue;
     if (c.status === 'closed' || c.status === 'hold' || c.status === 'managing') continue;
     if (c.type === 'seller' || c.type === 'landlord' || c.type === 'potential') continue;
-    var days = c.lastContact ? Math.floor((Date.now() - new Date(c.lastContact)) / 86400000) : 99999;
+    var days = daysSinceTouch(c);
     if (days >= 7) out.push({ c: c, days: days });
   }
   out.sort(function(a,b){ return b.days - a.days; });
@@ -2245,8 +2262,7 @@ function gradeColor(g) {
 //  점수 = 등급50 + 시기30 + 난이도20 (방치일은 점수 제외, 정리 판단에만)
 // ════════════════════════════════════════
 function daysSinceContact(c) {
-  if (!c.lastContact) return 99999;
-  return Math.floor((Date.now() - new Date(c.lastContact)) / 86400000);
+  return daysSinceTouch(c);
 }
 function focusScore(c) {
   var gw = ({ S:1, A:0.75, B:0.5, C:0.25, D:0.1 })[c.grade];
@@ -2839,6 +2855,31 @@ function calcBalance(total, deposit, mid) {
   return bal >= 0 ? bal : null;
 }
 
+function startEditVisit(cid, vid) {
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.visits) return;
+  var v = c.visits.find(function(x){ return x.id===vid; });
+  if (!v) return;
+  state.editingVisitId = vid;
+  state.visitDate = v.date || '';
+  state.visitBuilding = v.building || '';
+  state.visitAddress = v.address || '';
+  state.visitDong = v.dong || '';
+  state.visitHo = v.ho || '';
+  state.visitFloor = v.floor || '';
+  state.visitStars = v.stars || 0;
+  state.visitFeedback = v.feedback || '';
+  state.visitRequest = v.request || '';
+  state.activeTab = 'visit';
+  render();
+}
+function cancelEditVisit() {
+  state.editingVisitId = null;
+  state.visitDate=''; state.visitBuilding=''; state.visitAddress='';
+  state.visitDong=''; state.visitHo=''; state.visitFloor='';
+  state.visitStars=0; state.visitFeedback=''; state.visitRequest='';
+  render();
+}
 function addVisit() {
   if(!state.visitBuilding.trim() && !state.visitAddress.trim()) {
     showToast('건물명 또는 주소를 입력해주세요'); return;
@@ -2846,24 +2887,41 @@ function addVisit() {
   const c = state.customers.find(x=>x.id===state.selectedId);
   if(!c) return;
   c.visits = c.visits || [];
-  c.visits.unshift({
-    id: Date.now().toString(),
-    date:     state.visitDate    || today(),
-    building: state.visitBuilding.trim(),
-    address:  state.visitAddress.trim(),
-    dong:     state.visitDong.trim(),
-    ho:       state.visitHo.trim(),
-    floor:    state.visitFloor.trim(),
-    stars:    state.visitStars || 0,
-    feedback: state.visitFeedback.trim(),
-    request:  state.visitRequest.trim(),
-  });
+  const editing = !!state.editingVisitId;
+  if (editing) {
+    var v = c.visits.find(function(x){ return x.id===state.editingVisitId; });
+    if (v) {
+      v.date = state.visitDate||today();
+      v.building = state.visitBuilding.trim();
+      v.address = state.visitAddress.trim();
+      v.dong = state.visitDong.trim();
+      v.ho = state.visitHo.trim();
+      v.floor = state.visitFloor.trim();
+      v.stars = state.visitStars||0;
+      v.feedback = state.visitFeedback.trim();
+      v.request = state.visitRequest.trim();
+    }
+    state.editingVisitId = null;
+  } else {
+    c.visits.unshift({
+      id: Date.now().toString(),
+      date:     state.visitDate    || today(),
+      building: state.visitBuilding.trim(),
+      address:  state.visitAddress.trim(),
+      dong:     state.visitDong.trim(),
+      ho:       state.visitHo.trim(),
+      floor:    state.visitFloor.trim(),
+      stars:    state.visitStars || 0,
+      feedback: state.visitFeedback.trim(),
+      request:  state.visitRequest.trim(),
+    });
+  }
   // 입력 초기화
   state.visitDate=''; state.visitBuilding=''; state.visitAddress='';
   state.visitDong=''; state.visitHo=''; state.visitFloor='';
   state.visitStars=0; state.visitFeedback=''; state.visitRequest='';
   render();
-  persistAll('🏠 투어 기록이 저장됐어요');
+  persistAll(editing ? '✏️ 투어 기록이 수정됐어요' : '🏠 투어 기록이 저장됐어요');
 }
 
 function deleteLog(customerId, logIdx) {
@@ -3840,7 +3898,7 @@ function render() {
       ).join('');
       tabBody = `
         <div class="log-add">
-          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">🏠 투어 기록 추가</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">${state.editingVisitId ? '✏️ 투어 기록 수정' : '🏠 투어 기록 추가'}</div>
           <div class="log-add-row" style="flex-wrap:wrap;gap:6px;">
             <input class="form-input" type="date" value="${state.visitDate||today()}" onchange="state.visitDate=this.value" style="flex:0 0 130px">
             <input class="form-input" placeholder="건물명 / 단지명 *" value="${state.visitBuilding}" oninput="state.visitBuilding=this.value" style="flex:1;min-width:140px">
@@ -3859,7 +3917,9 @@ function render() {
           </div>
           <textarea class="form-input" placeholder="피드백 (고객 반응, 의견...)" oninput="state.visitFeedback=this.value" style="height:60px;margin-bottom:6px">${state.visitFeedback}</textarea>
           <textarea class="form-input" placeholder="추가 요청사항 (다음에 볼 조건, 희망 사항...)" oninput="state.visitRequest=this.value" style="height:50px;margin-bottom:8px">${state.visitRequest}</textarea>
-          <button class="btn btn-primary btn-sm" onclick="addVisit()" style="width:100%">투어 기록 저장</button>
+          ${state.editingVisitId
+            ? `<div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="cancelEditVisit()" style="flex:0 0 80px">취소</button><button class="btn btn-primary btn-sm" onclick="addVisit()" style="flex:1">✏️ 수정 저장</button></div>`
+            : `<button class="btn btn-primary btn-sm" onclick="addVisit()" style="width:100%">투어 기록 저장</button>`}
         </div>
         ${visits.length === 0
           ? '<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">투어 기록이 없습니다</div>'
@@ -3871,7 +3931,6 @@ function render() {
                 v.floor ? `${v.floor}층` : null,
               ].filter(Boolean);
               return `<div class="visit-card">
-                <button class="btn btn-sm btn-danger visit-del-btn" onclick="deleteVisit('${sel.id}','${v.id}')">삭제</button>
                 <div class="visit-card-header">
                   <div>
                     <div class="visit-building">${v.building||'(건물명 없음)'}</div>
@@ -3883,6 +3942,10 @@ function render() {
                 <div style="margin-bottom:8px"><div class="visit-stars">${stars}</div></div>
                 ${v.feedback?`<div class="visit-section-label">피드백</div><div class="visit-text">${v.feedback}</div>`:''}
                 ${v.request?`<div class="visit-section-label" style="margin-top:8px">추가 요청사항</div><div class="visit-text">${v.request}</div>`:''}
+                <div class="visit-actions">
+                  <button class="btn btn-sm visit-act-btn" onclick="startEditVisit('${sel.id}','${v.id}')">✏️ 수정</button>
+                  <button class="btn btn-sm btn-danger visit-act-btn" onclick="deleteVisit('${sel.id}','${v.id}')">삭제</button>
+                </div>
               </div>`;
             }).join('')
         }`;

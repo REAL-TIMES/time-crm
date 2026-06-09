@@ -519,6 +519,11 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .db-num{background:#f6f7f9;border-radius:9px;padding:8px 4px;text-align:center;}
 .db-num-v{font-size:17px;font-weight:800;color:#13294B;}
 .db-num-l{font-size:10.5px;color:#8a93a2;font-weight:600;margin-top:1px;}
+.db-bar{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:11.5px;}
+.db-bar-l{flex:0 0 34px;color:#33405a;font-weight:700;}
+.db-bar-track{flex:1;height:14px;background:#eef1f6;border-radius:7px;overflow:hidden;}
+.db-bar-fill{display:block;height:100%;border-radius:7px;min-width:2px;}
+.db-bar-v{flex:0 0 24px;text-align:right;color:#8a93a2;font-weight:700;}
 .focus-banner:hover{opacity:.9;}
 .foc-score{flex-shrink:0;font-size:12px;font-weight:800;color:#13294B;background:#eef1f6;padding:2px 8px;border-radius:8px;}
 #focus-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
@@ -1462,7 +1467,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.0';
+const APP_VERSION = 'v2.16.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2318,7 +2323,9 @@ function focusEligible(c) {
   if (c.status === 'closed' || c.status === 'hold' || c.status === 'managing') return false;
   return true;
 }
-function focusPools() {
+function focusPools(vipN, quickN) {
+  if (vipN === undefined) vipN = 1;
+  if (quickN === undefined) quickN = 4;
   var arr = state.customers || [];
   var pool = [], cleanup = [];
   for (var i=0;i<arr.length;i++) {
@@ -2339,7 +2346,7 @@ function focusPools() {
     if (order[a.tier.key] !== order[b.tier.key]) return order[a.tier.key] - order[b.tier.key];
     return b.days - a.days;
   });
-  return { vip: hard.slice(0,1), quick: rest.slice(0,4), cleanup: cleanup };
+  return { vip: hard.slice(0,vipN), quick: rest.slice(0,quickN), cleanup: cleanup };
 }
 function focusItemHtml(c) {
   var g = c.grade || '';
@@ -3030,7 +3037,7 @@ function renderDashboard(s) {
   var seller = custs.filter(function(x){ return x.type==='seller'; }).length;
   var landlord = custs.filter(function(x){ return x.type==='landlord'; }).length;
 
-  var fp = focusPools();
+  var fp = focusPools(2, 8);
   var ups = upcomingSchedules();
   var missed = missedSchedules();
   var fu = followupCandidates();
@@ -3089,12 +3096,30 @@ function renderDashboard(s) {
   } else { fuCard += '<div class="db-empty">모두 최근에 챙기셨어요 👍</div>'; }
   fuCard += '</div>';
 
-  // 📊 숫자 요약
-  function numCell(label,val){ return '<div class="db-num"><div class="db-num-v">' + val + '</div><div class="db-num-l">' + label + '</div></div>'; }
+  // 📊 숫자 요약 (색상 + 막대그래프)
+  function numCell(label,val,color){ return '<div class="db-num"><div class="db-num-v"' + (color?' style="color:'+color+'"':'') + '>' + val + '</div><div class="db-num-l">' + label + '</div></div>'; }
+  function bar(label,val,max,color){ var pct = max>0 ? Math.round(val/max*100) : 0; return '<div class="db-bar"><span class="db-bar-l">' + label + '</span><span class="db-bar-track"><span class="db-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></span><span class="db-bar-v">' + val + '</span></div>'; }
+  var gMax = Math.max(s.S,s.A,s.B,s.C,s.D,1);
+  var tMax = Math.max(buyer,tenant,seller,landlord,1);
   var numCard = '<div class="db-card"><div class="db-card-h"><span>📊 숫자 요약</span></div>'
-    + '<div class="db-num-grid">' + numCell('전체', s.total) + numCell('매수', buyer) + numCell('임차', tenant) + numCell('매도', seller) + numCell('임대', landlord) + '</div>'
-    + '<div class="db-sub">등급</div>'
-    + '<div class="db-num-grid">' + numCell('S', s.S) + numCell('A', s.A) + numCell('B', s.B) + numCell('C', s.C) + numCell('D', s.D) + '</div>'
+    + '<div class="db-num-grid">'
+      + numCell('전체', s.total, '#13294B')
+      + numCell('매수', buyer, '#1c4e8a')
+      + numCell('임차', tenant, '#2E7D9A')
+      + numCell('매도', seller, '#C77F1A')
+      + numCell('임대', landlord, '#8a93a2')
+    + '</div>'
+    + '<div class="db-sub">등급 분포</div>'
+      + bar('S', s.S, gMax, gradeColor('S'))
+      + bar('A', s.A, gMax, gradeColor('A'))
+      + bar('B', s.B, gMax, gradeColor('B'))
+      + bar('C', s.C, gMax, gradeColor('C'))
+      + bar('D', s.D, gMax, gradeColor('D'))
+    + '<div class="db-sub">유형 분포</div>'
+      + bar('매수', buyer, tMax, '#1c4e8a')
+      + bar('임차', tenant, tMax, '#2E7D9A')
+      + bar('매도', seller, tMax, '#C77F1A')
+      + bar('임대', landlord, tMax, '#8a93a2')
     + '<div class="db-sub">진행</div>'
     + '<div class="db-stat-row"><span class="db-pill">계약 ' + s.contracting + '</span><span class="db-pill">보류 ' + s.hold + '</span><span class="db-pill">종료 ' + s.closed + '</span></div>'
     + '</div>';

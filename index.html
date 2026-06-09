@@ -1421,7 +1421,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.14.0';
+const APP_VERSION = 'v2.14.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1458,7 +1458,7 @@ let state = {
   filterPropMain: 'all',
   filterPropSub: 'all',
   showClosed: false,
-  sidebarOpen: true,
+  sidebarOpen: (typeof window !== 'undefined' && window.innerWidth > 768),
   sortBy: 'registered',
   sortDir: 'desc',
   editingLogId: null,
@@ -2915,7 +2915,7 @@ function render() {
   html += `<div class="body-wrap">`;
 
   // ══ 좌측 사이드바 ══
-  html += `<div class="sidebar${state.sidebarOpen?'':' collapsed'}">`;
+  html += `<div class="sidebar${state.sidebarOpen?' mobile-open':' collapsed'}">`;
   html += `<div class="sb-section">
     <div class="sb-section-title">검색</div>
     <div class="sb-search-wrap">

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -182,7 +182,7 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 
 /* 모바일: 사이드바 오버레이 */
 @media (max-width: 768px) {
-  .sidebar { position: fixed; left: 0; top: 44px; bottom: 0; z-index: 80; transform: translateX(-100%); transition: transform 0.25s; width: 280px; }
+  .sidebar { position: fixed; left: 0; top: 44px; bottom: 0; z-index: 80; transform: translateX(-100%); transition: transform 0.25s; width: 280px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 64px); }
   .sidebar.mobile-open { transform: translateX(0); }
   .sidebar-overlay { position: fixed; inset: 0; top: 44px; background: rgba(0,0,0,0.5); z-index: 79; display: none; }
   .sidebar-overlay.show { display: block; }
@@ -500,12 +500,12 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .ag-name{font-weight:700;color:#13294B;cursor:pointer;text-decoration:underline;}
 
 /* ── FAB */
-.fab { position: fixed; bottom: 24px; right: 20px; width: 52px; height: 52px; background: var(--navy); color: var(--gold); border: none; border-radius: 50%; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(26,26,46,0.4); z-index: 40; transition: all 0.2s; }
+.fab { position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); right: 20px; width: 52px; height: 52px; background: var(--navy); color: var(--gold); border: none; border-radius: 50%; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(26,26,46,0.4); z-index: 40; transition: all 0.2s; }
 .fab:hover { background: var(--navy-light); transform: scale(1.05); }
 .fab:active { transform: scale(0.95); }
 
 /* Bottom nav area padding */
-.list-wrap { padding-bottom: 80px; }
+.list-wrap { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
 
 /* Toast */
 .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--navy); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 200; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
@@ -609,7 +609,7 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #qa-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #qa-modal.show{display:flex;}
 @media(min-width:600px){#qa-modal{align-items:center;padding:20px;}}
-.qa-box{background:#fff;width:100%;max-width:460px;max-height:94vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px 26px;-webkit-overflow-scrolling:touch;}
+.qa-box{background:#fff;width:100%;max-width:460px;max-height:94vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(26px + env(safe-area-inset-bottom, 0px) + 16px);-webkit-overflow-scrolling:touch;}
 @media(min-width:600px){.qa-box{border-radius:18px;}}
 .qa-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
 .qa-title{font-size:18px;font-weight:800;color:#13294B;}
@@ -617,7 +617,7 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #trash-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #trash-modal.show{display:flex;}
 @media(min-width:600px){#trash-modal{align-items:center;padding:20px;}}
-.trash-box{background:#fff;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px;-webkit-overflow-scrolling:touch;}
+.trash-box{background:#fff;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom, 0px) + 24px);-webkit-overflow-scrolling:touch;}
 @media(min-width:600px){.trash-box{border-radius:18px;}}
 .trash-head{display:flex;align-items:center;justify-content:space-between;}
 .trash-title{font-size:18px;font-weight:800;color:#13294B;}
@@ -632,7 +632,7 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #followup-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #followup-modal.show{display:flex;}
 @media(min-width:600px){#followup-modal{align-items:center;padding:20px;}}
-.fu-box{background:#fff;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px;-webkit-overflow-scrolling:touch;}
+.fu-box{background:#fff;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom, 0px) + 24px);-webkit-overflow-scrolling:touch;}
 @media(min-width:600px){.fu-box{border-radius:18px;}}
 .fu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
 .fu-title{font-size:18px;font-weight:800;color:#13294B;}
@@ -1421,7 +1421,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.14.1';
+const APP_VERSION = 'v2.14.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [

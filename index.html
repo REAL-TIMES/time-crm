@@ -1421,7 +1421,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.14.2';
+const APP_VERSION = 'v2.14.3';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2076,12 +2076,6 @@ function filtered() {
       case 'lastContact':  return ((a.lastContact?new Date(a.lastContact):new Date(0)) - (b.lastContact?new Date(b.lastContact):new Date(0))) * dir;
       case 'registered':   return ((parseInt(a.id)||0) - (parseInt(b.id)||0)) * dir;
       case 'name':         return a.name.localeCompare(b.name, 'ko') * dir;
-      case 'leaseExpiry':  return ((a.leaseExpiry?new Date(a.leaseExpiry):new Date('9999')) - (b.leaseExpiry?new Date(b.leaseExpiry):new Date('9999'))) * dir;
-      case 'elapsed': {
-        const ea = a.lastContact ? Math.floor((Date.now()-new Date(a.lastContact))/86400000) : 9999;
-        const eb = b.lastContact ? Math.floor((Date.now()-new Date(b.lastContact))/86400000) : 9999;
-        return (ea - eb) * dir;
-      }
       default: return (GO[a.grade]||9) - (GO[b.grade]||9);
     }
   });
@@ -3022,11 +3016,9 @@ function render() {
     <div style="display:flex;gap:4px;align-items:center;flex:1;justify-content:flex-end;flex-wrap:wrap;">
       <select style="padding:4px 7px;font-size:11px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text);cursor:pointer;font-family:inherit;"
         onchange="state.sortBy=this.value;render()">
-        <option value="registered"${state.sortBy==='registered'?' selected':''}>접수일순</option>
-        <option value="grade"${state.sortBy==='grade'?' selected':''}>등급순</option>
-        <option value="elapsed"${state.sortBy==='elapsed'?' selected':''}>상담 경과순</option>
-        <option value="leaseExpiry"${state.sortBy==='leaseExpiry'?' selected':''}>만기일순</option>
-        <option value="name"${state.sortBy==='name'?' selected':''}>이름순</option>
+        <option value="registered"${state.sortBy==='registered'?' selected':''}>접수일</option>
+        <option value="grade"${state.sortBy==='grade'?' selected':''}>등급</option>
+        <option value="name"${state.sortBy==='name'?' selected':''}>이름</option>
       </select>
       <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()"
         style="padding:4px 8px;font-size:11px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text);cursor:pointer;">

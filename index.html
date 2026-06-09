@@ -495,6 +495,11 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .fu-tier.missed{background:#fbe0dd;color:#a52714;}
 .fu-detail{margin:2px 0 8px 32px;padding:8px 10px;background:#f6f7f9;border-radius:8px;font-size:12px;color:#33405a;line-height:1.65;}
 .fu-detail .fu-dl{display:inline-block;min-width:46px;font-weight:700;color:#8a93a2;}
+.fu-log{display:flex;gap:6px;margin:0 0 8px 32px;}
+.fu-log-input{flex:1;min-width:0;padding:7px 10px;border:1px solid #d5dae2;border-radius:8px;font-size:12.5px;font-family:inherit;color:#222a35;background:#fff;}
+.fu-log-input:focus{outline:none;border-color:var(--gold);}
+.fu-log-save{flex-shrink:0;padding:7px 12px;border:1px solid #13294B;background:#13294B;color:#fff;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.fu-log-save:hover{opacity:.9;}
 #sched-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #sched-modal.show{display:flex;}
 @media(min-width:600px){#sched-modal{align-items:center;padding:20px;}}
@@ -1425,7 +1430,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.15.1';
+const APP_VERSION = 'v2.15.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1466,6 +1471,7 @@ let state = {
   sortBy: 'registered',
   sortDir: 'desc',
   fuExpanded: {},
+  fuLogDraft: {},
   editingLogId: null,
   editingLogText: '',
   editingVisitId: null,
@@ -2369,6 +2375,20 @@ function fuToggleDetail(id) {
   state.fuExpanded[id] = !state.fuExpanded[id];
   renderFollowup();
 }
+function escapeAttrT(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fuAddLog(id) {
+  var txt = (state.fuLogDraft && state.fuLogDraft[id]) ? state.fuLogDraft[id].trim() : '';
+  if (!txt) { showToast('내용을 입력해주세요'); return; }
+  var c = (state.customers || []).find(function(x){ return x.id === id; });
+  if (!c) return;
+  c.contacts = c.contacts || [];
+  c.contacts.unshift({ date: today(), text: txt, topic: '' });
+  c.lastContact = today();                 // 연락일 갱신 → 팔로우업에서 빠짐
+  if (state.fuLogDraft) state.fuLogDraft[id] = '';
+  renderFollowup();
+  render();
+  persistAll('📞 기록 저장 · 연락일 갱신됨');
+}
 function fuItemHtml(c, days) {
   var g = c.grade || '';
   var dayTxt = days >= 99999 ? '연락 기록 없음' : (days + '일 경과');
@@ -2376,11 +2396,18 @@ function fuItemHtml(c, days) {
   var expanded = !!(state.fuExpanded && state.fuExpanded[c.id]);
   var detail = '';
   if (expanded) {
+    var draft = (state.fuLogDraft && state.fuLogDraft[c.id]) ? state.fuLogDraft[c.id] : '';
     detail = '<div class="fu-detail">'
       + '<div><span class="fu-dl">관심</span> ' + (c.interest ? escapeHtmlT(c.interest) : '-') + '</div>'
       + '<div><span class="fu-dl">입주</span> ' + (c.moveTiming ? c.moveTiming : '-') + '</div>'
       + '<div><span class="fu-dl">메모</span> ' + (c.notes ? escapeHtmlT(c.notes) : '-') + '</div>'
       + '<div><span class="fu-dl">최근상담</span> ' + fuRecentContacts(c) + '</div>'
+      + '</div>'
+      + '<div class="fu-log">'
+        + '<input class="fu-log-input" placeholder="오늘 통화·문자 내용 한 줄..." value="' + escapeAttrT(draft) + '"'
+        + ' oninput="if(!state.fuLogDraft)state.fuLogDraft={};state.fuLogDraft[\'' + c.id + '\']=this.value"'
+        + ' onkeydown="if(event.key===\'Enter\'){fuAddLog(\'' + c.id + '\');event.preventDefault()}">'
+        + '<button class="fu-log-save" onclick="fuAddLog(\'' + c.id + '\')">기록</button>'
       + '</div>';
   }
   return '<div class="fu-item">'

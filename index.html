@@ -550,6 +550,41 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #sched-modal.show{display:flex;}
 @media(min-width:600px){#sched-modal{align-items:center;padding:20px;}}
 .ag-item{background:var(--bg3);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.cal-tabs{display:flex;gap:6px;margin-bottom:12px;}
+.cal-tab{flex:1;padding:8px 0;border:1px solid #d5dae2;background:#fff;color:#33405a;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.cal-tab.active{background:#13294B;color:#fff;border-color:#13294B;}
+.cal-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.cal-arr{width:32px;height:32px;border:1px solid #d5dae2;background:#fff;border-radius:8px;font-size:16px;cursor:pointer;font-family:inherit;color:#33405a;}
+.cal-arr:hover{background:#f2f4f7;}
+.cal-title{flex:1;text-align:center;font-size:14px;font-weight:800;color:#13294B;}
+.cal-today{padding:7px 12px;border:1px solid #13294B;background:#fff;color:#13294B;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-dow{text-align:center;font-size:11px;font-weight:700;color:#8a93a2;padding:4px 0;}
+.cal-dow.sun{color:#e74c3c;} .cal-dow.sat{color:#1c4e8a;}
+.cal-cell{min-height:46px;border-radius:8px;background:#f6f7f9;padding:4px 0 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;}
+.cal-cell.empty{background:transparent;cursor:default;}
+.cal-cell:not(.empty):hover{background:#e9edf2;}
+.cal-cell.today{background:#eaf2fb;box-shadow:inset 0 0 0 1.5px #1c4e8a;}
+.cal-cell.sel{box-shadow:inset 0 0 0 2px #C9A24B;}
+.cal-dnum{font-size:12px;font-weight:700;color:#33405a;}
+.cal-dnum.sun{color:#e74c3c;} .cal-dnum.sat{color:#1c4e8a;}
+.cal-dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;margin-top:3px;max-width:40px;}
+.cal-dot{width:6px;height:6px;border-radius:50%;}
+.cal-hint{text-align:center;color:#9aa3b2;font-size:12px;padding:16px 4px;}
+.cal-daylist{margin-top:14px;}
+.cal-daylist-h{font-size:13px;font-weight:800;color:#13294B;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #eee;}
+.wk-wrap{display:flex;flex-direction:column;gap:8px;}
+.wk-day{border:1px solid #e6e8ec;border-radius:10px;padding:8px 10px;}
+.wk-day.today{border-color:#1c4e8a;background:#f7fafe;}
+.wk-dayh{font-size:12px;font-weight:800;color:#33405a;margin-bottom:5px;}
+.wk-dayh.sun{color:#e74c3c;} .wk-dayh.sat{color:#1c4e8a;}
+.wk-chip{display:flex;align-items:center;gap:7px;padding:5px 6px;border-radius:7px;cursor:pointer;font-size:12.5px;}
+.wk-chip:hover{background:#f2f4f7;}
+.wk-cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.wk-ctime{flex-shrink:0;font-size:11.5px;font-weight:700;color:#8a93a2;min-width:62px;}
+.wk-cname{flex:1;min-width:0;font-weight:700;color:#222a35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.wk-done{color:#2e9e5b;font-weight:800;flex-shrink:0;}
+.wk-empty{color:#c3c9d2;font-size:12px;padding:2px 6px;}
 .ag-when{font-size:12px;font-weight:700;color:#1c4e8a;margin-bottom:5px;}
 .ag-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ag-name{font-weight:700;color:#13294B;cursor:pointer;text-decoration:underline;}
@@ -1455,6 +1490,7 @@ const STATUS_ICON = {
 
 const SCHED_TYPES = ['상담','투어','통화','기타'];
 const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
+const SCHED_COLOR = { '상담':'#2E7D9A', '투어':'#C77F1A', '통화':'#1c4e8a', '기타':'#8a93a2' };
 
 // ── 난이도(집중도): 매수·임차 고객의 '오늘의 집중' 선별용 ──
 const DIFF = { hard:{label:'🎯 어려움'}, mid:{label:'🟡 보통'}, easy:{label:'⚡ 쉬움'} };
@@ -1476,7 +1512,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.2';
+const APP_VERSION = 'v2.16.3';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1518,6 +1554,9 @@ let state = {
   sortDir: 'desc',
   fuExpanded: {},
   fuLogDraft: {},
+  schedView: 'list',
+  schedRef: '',
+  schedSelDay: '',
   editingLogId: null,
   editingLogText: '',
   editingVisitId: null,
@@ -2616,50 +2655,156 @@ function missedSchedules() {
   out.sort(function(a,b){ return ((b.s.date+(b.s.time||''))).localeCompare(a.s.date+(a.s.time||'')); });
   return out;
 }
-function openSchedAgenda() { renderSchedAgenda(); var m=document.getElementById('sched-modal'); if(m) m.classList.add('show'); }
+function openSchedAgenda() { state.schedRef = today(); state.schedSelDay = ''; renderSchedAgenda(); var m=document.getElementById('sched-modal'); if(m) m.classList.add('show'); }
 function closeSchedAgenda() { var m=document.getElementById('sched-modal'); if(m) m.classList.remove('show'); }
-function renderSchedAgenda() {
-  var body = document.getElementById('sched-agenda-body'); if (!body) return;
+function schedPad2(n){ return n<10 ? '0'+n : ''+n; }
+function schedFmtDate(dt){ return dt.getFullYear() + '-' + schedPad2(dt.getMonth()+1) + '-' + schedPad2(dt.getDate()); }
+function allSchedules() {
+  var out = []; var arr = state.customers || [];
+  for (var i=0;i<arr.length;i++) {
+    var c = arr[i]; if (c.deleted) continue;
+    var sch = c.schedules || [];
+    for (var j=0;j<sch.length;j++) { if (sch[j].date) out.push({ cid:c.id, cname:c.name, cphone:c.phone, s:sch[j] }); }
+  }
+  return out;
+}
+function schedItemHtml(x, isMissed) {
+  var s = x.s;
+  return '<div class="ag-item">'
+    + '<div class="ag-when">' + fmtDateFull(s.date) + (s.time ? ' · ' + toAmPm(s.time) : '') + '</div>'
+    + '<div class="ag-row">'
+      + '<span class="sch-type">' + (SCHED_ICON[s.type]||'📌') + ' ' + (s.type||'') + '</span>'
+      + '<span class="ag-name" onclick="closeSchedAgenda();openDetail(\'' + x.cid + '\')">' + escapeHtmlT(x.cname||'(이름없음)') + '</span>'
+    + '</div>'
+    + (s.place ? '<div class="sch-sub">📍 ' + escapeHtmlT(s.place) + '</div>' : '')
+    + (s.memo ? '<div class="sch-sub">📝 ' + escapeHtmlT(s.memo) + '</div>' : '')
+    + '<div class="sch-btns">'
+      + '<button class="btn btn-sm b-call" onclick="fuCall(\'' + x.cid + '\')">📞 전화</button>'
+      + '<button class="btn btn-sm" onclick="agendaDone(\'' + x.cid + '\',\'' + s.sid + '\')">✅ 완료</button>'
+      + '<button class="btn btn-sm" onclick="openGcal(\'' + x.cid + '\',\'' + s.sid + '\')">📅 캘린더</button>'
+      + (isMissed ? '<button class="btn btn-sm" onclick="postponeSchedule(\'' + x.cid + '\',\'' + s.sid + '\')">📅 오늘로</button>' : '')
+      + (isMissed ? '<button class="btn btn-sm btn-danger" onclick="agendaDelete(\'' + x.cid + '\',\'' + s.sid + '\')">삭제</button>' : '')
+    + '</div></div>';
+}
+function schedListHtml() {
   var missed = missedSchedules();
   var ups = upcomingSchedules();
-  if (!missed.length && !ups.length) { body.innerHTML = '<div class="fu-empty">다가오는 일정이 없어요.</div>'; return; }
+  if (!missed.length && !ups.length) return '<div class="fu-empty">다가오는 일정이 없어요.</div>';
   var t = today(); var wkEnd = addDaysStr(t, 6);
   var g1=[], g2=[], g3=[];
   for (var i=0;i<ups.length;i++) {
     var d = ups[i].s.date;
-    if (d === t) g1.push(ups[i]);
-    else if (d <= wkEnd) g2.push(ups[i]);
-    else g3.push(ups[i]);
-  }
-  function item(x, isMissed) {
-    var s = x.s;
-    return '<div class="ag-item">'
-      + '<div class="ag-when">' + fmtDateFull(s.date) + (s.time ? ' · ' + toAmPm(s.time) : '') + '</div>'
-      + '<div class="ag-row">'
-        + '<span class="sch-type">' + (SCHED_ICON[s.type]||'📌') + ' ' + (s.type||'') + '</span>'
-        + '<span class="ag-name" onclick="closeSchedAgenda();openDetail(\'' + x.cid + '\')">' + escapeHtmlT(x.cname||'(이름없음)') + '</span>'
-      + '</div>'
-      + (s.place ? '<div class="sch-sub">📍 ' + escapeHtmlT(s.place) + '</div>' : '')
-      + (s.memo ? '<div class="sch-sub">📝 ' + escapeHtmlT(s.memo) + '</div>' : '')
-      + '<div class="sch-btns">'
-        + '<button class="btn btn-sm b-call" onclick="fuCall(\'' + x.cid + '\')">📞 전화</button>'
-        + '<button class="btn btn-sm" onclick="agendaDone(\'' + x.cid + '\',\'' + s.sid + '\')">✅ 완료</button>'
-        + '<button class="btn btn-sm" onclick="openGcal(\'' + x.cid + '\',\'' + s.sid + '\')">📅 캘린더</button>'
-        + (isMissed ? '<button class="btn btn-sm" onclick="postponeSchedule(\'' + x.cid + '\',\'' + s.sid + '\')">📅 오늘로</button>' : '')
-        + (isMissed ? '<button class="btn btn-sm btn-danger" onclick="agendaDelete(\'' + x.cid + '\',\'' + s.sid + '\')">삭제</button>' : '')
-      + '</div></div>';
+    if (d === t) g1.push(ups[i]); else if (d <= wkEnd) g2.push(ups[i]); else g3.push(ups[i]);
   }
   function grp(title, cls, items, isMissed) {
     if (!items.length) return '';
     var h = '<div class="fu-tier ' + cls + '">' + title + ' · ' + items.length + '건</div>';
-    for (var k=0;k<items.length;k++) h += item(items[k], isMissed);
+    for (var k=0;k<items.length;k++) h += schedItemHtml(items[k], isMissed);
     return h;
   }
-  body.innerHTML =
-      grp('⚠️ 놓친 일정 (지난 미완료)','missed',missed,true)
-    + grp('오늘','red',g1,false)
-    + grp('이번 주','orange',g2,false)
-    + grp('이후','yellow',g3,false);
+  return grp('⚠️ 놓친 일정 (지난 미완료)','missed',missed,true)
+    + grp('오늘','red',g1,false) + grp('이번 주','orange',g2,false) + grp('이후','yellow',g3,false);
+}
+function dayListHtml(ds) {
+  var all = allSchedules().filter(function(x){ return x.s.date===ds; });
+  all.sort(function(a,b){ return (a.s.time||'').localeCompare(b.s.time||''); });
+  if (!all.length) return '<div class="fu-empty">이 날은 일정이 없어요.</div>';
+  var t = today(); var h = '';
+  for (var i=0;i<all.length;i++) { h += schedItemHtml(all[i], (ds < t) && !all[i].s.done); }
+  return h;
+}
+function schedMonthHtml() {
+  var ref = state.schedRef || today();
+  var p = ref.split('-'); var y = parseInt(p[0],10), m = parseInt(p[1],10);
+  var first = new Date(y, m-1, 1); var startDay = first.getDay();
+  var dim = new Date(y, m, 0).getDate(); var t = today();
+  var map = {}; allSchedules().forEach(function(x){ var d=x.s.date; if(!map[d])map[d]=[]; map[d].push(x); });
+  var head = '<div class="cal-nav"><button class="cal-arr" onclick="schedShift(-1)">‹</button>'
+    + '<span class="cal-title">' + y + '년 ' + m + '월</span>'
+    + '<button class="cal-arr" onclick="schedShift(1)">›</button>'
+    + '<button class="cal-today" onclick="schedGoToday()">오늘</button></div>';
+  var dows = ['일','월','화','수','목','금','토'];
+  var grid = '<div class="cal-grid">';
+  for (var i=0;i<7;i++) grid += '<div class="cal-dow' + (i===0?' sun':i===6?' sat':'') + '">' + dows[i] + '</div>';
+  for (var b=0;b<startDay;b++) grid += '<div class="cal-cell empty"></div>';
+  for (var day=1;day<=dim;day++) {
+    var ds = y + '-' + schedPad2(m) + '-' + schedPad2(day);
+    var list = map[ds] || [];
+    var dots = '';
+    if (list.length) {
+      var types = {}; list.forEach(function(x){ types[x.s.type||'기타']=1; });
+      var tk = Object.keys(types).slice(0,4);
+      dots = '<div class="cal-dots">' + tk.map(function(tp){ return '<span class="cal-dot" style="background:' + (SCHED_COLOR[tp]||'#8a93a2') + '"></span>'; }).join('') + '</div>';
+    }
+    var cls = 'cal-cell';
+    if (ds === t) cls += ' today';
+    if (ds === state.schedSelDay) cls += ' sel';
+    var dow = (startDay + day - 1) % 7;
+    var dnumcls = 'cal-dnum' + (dow===0?' sun':dow===6?' sat':'');
+    grid += '<div class="' + cls + '" onclick="schedSelectDay(\'' + ds + '\')"><span class="' + dnumcls + '">' + day + '</span>' + dots + '</div>';
+  }
+  grid += '</div>';
+  var dayList = state.schedSelDay
+    ? '<div class="cal-daylist"><div class="cal-daylist-h">' + fmtDateFull(state.schedSelDay) + '</div>' + dayListHtml(state.schedSelDay) + '</div>'
+    : '<div class="cal-hint">날짜를 누르면 그 날 일정이 보여요</div>';
+  return head + grid + dayList;
+}
+function schedWeekHtml() {
+  var ref = state.schedRef || today();
+  var p = ref.split('-'); var d = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10));
+  var start = new Date(d); start.setDate(d.getDate() - d.getDay());
+  var startStr = schedFmtDate(start); var endD = new Date(start); endD.setDate(start.getDate()+6); var endStr = schedFmtDate(endD);
+  var map = {}; allSchedules().forEach(function(x){ if(!map[x.s.date])map[x.s.date]=[]; map[x.s.date].push(x); });
+  var head = '<div class="cal-nav"><button class="cal-arr" onclick="schedShift(-1)">‹</button>'
+    + '<span class="cal-title">' + fmtDateFull(startStr) + ' ~ ' + fmtDateFull(endStr) + '</span>'
+    + '<button class="cal-arr" onclick="schedShift(1)">›</button>'
+    + '<button class="cal-today" onclick="schedGoToday()">오늘</button></div>';
+  var dows = ['일','월','화','수','목','금','토']; var t = today(); var body = '';
+  for (var i=0;i<7;i++) {
+    var cur = new Date(start); cur.setDate(start.getDate()+i); var ds = schedFmtDate(cur);
+    var list = (map[ds]||[]).slice().sort(function(a,b){ return (a.s.time||'').localeCompare(b.s.time||''); });
+    var isToday = ds === t;
+    body += '<div class="wk-day' + (isToday?' today':'') + '">'
+      + '<div class="wk-dayh' + (i===0?' sun':i===6?' sat':'') + '">' + dows[i] + ' · ' + fmtDateFull(ds) + (isToday?' (오늘)':'') + '</div>';
+    if (list.length) {
+      list.forEach(function(x){ var s = x.s;
+        body += '<div class="wk-chip" onclick="closeSchedAgenda();openDetail(\'' + x.cid + '\')">'
+          + '<span class="wk-cdot" style="background:' + (SCHED_COLOR[s.type]||'#8a93a2') + '"></span>'
+          + '<span class="wk-ctime">' + (s.time ? toAmPm(s.time) : '종일') + '</span>'
+          + '<span class="wk-cname">' + (SCHED_ICON[s.type]||'📌') + ' ' + escapeHtmlT(x.cname||'') + '</span>'
+          + (s.done ? '<span class="wk-done">✓</span>' : '') + '</div>';
+      });
+    } else { body += '<div class="wk-empty">—</div>'; }
+    body += '</div>';
+  }
+  return head + '<div class="wk-wrap">' + body + '</div>';
+}
+function schedSetView(v) { state.schedView = v; renderSchedAgenda(); }
+function schedSelectDay(ds) { state.schedSelDay = (state.schedSelDay===ds ? '' : ds); renderSchedAgenda(); }
+function schedGoToday() { state.schedRef = today(); state.schedSelDay = today(); renderSchedAgenda(); }
+function schedShift(dir) {
+  var ref = state.schedRef || today();
+  var p = ref.split('-'); var y = parseInt(p[0],10), m = parseInt(p[1],10), dd = parseInt(p[2],10);
+  if (state.schedView === 'month') {
+    var nd = new Date(y, m-1+dir, 1);
+    state.schedRef = schedFmtDate(nd);
+  } else {
+    var d = new Date(y, m-1, dd); d.setDate(d.getDate() + dir*7);
+    state.schedRef = schedFmtDate(d);
+  }
+  state.schedSelDay = '';
+  renderSchedAgenda();
+}
+function renderSchedAgenda() {
+  var body = document.getElementById('sched-agenda-body'); if (!body) return;
+  if (!state.schedView) state.schedView = 'list';
+  function tab(v,label){ return '<button class="cal-tab' + (state.schedView===v?' active':'') + '" onclick="schedSetView(\'' + v + '\')">' + label + '</button>'; }
+  var tabs = '<div class="cal-tabs">' + tab('list','리스트') + tab('week','주') + tab('month','월') + '</div>';
+  var content;
+  if (state.schedView === 'week') content = schedWeekHtml();
+  else if (state.schedView === 'month') content = schedMonthHtml();
+  else content = schedListHtml();
+  body.innerHTML = tabs + content;
 }
 async function agendaDone(cid, sid) {
   var c = (state.customers||[]).find(function(x){ return x.id===cid; });

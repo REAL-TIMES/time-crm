@@ -166,6 +166,13 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
   flex-direction: column;
   background: var(--bg);
 }
+.filter-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;padding:8px 10px;background:#f4f6f9;border-radius:10px;}
+.fb-label{font-size:11px;font-weight:700;color:#8a93a2;}
+.fb-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 6px 4px 11px;background:#fff;border:1px solid #d5dae2;border-radius:16px;font-size:12px;font-weight:700;color:#33405a;}
+.fb-x{border:none;background:#e8ebf0;color:#5b6472;width:16px;height:16px;border-radius:50%;font-size:10px;cursor:pointer;line-height:16px;padding:0;font-family:inherit;text-align:center;}
+.fb-x:hover{background:#d33;color:#fff;}
+.fb-reset{margin-left:auto;padding:5px 12px;border:1px solid #13294B;background:#13294B;color:#fff;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.fb-reset:hover{opacity:.9;}
 .list-wrap {
   flex: 1 1 0%;
   min-height: 0;
@@ -494,10 +501,10 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .db-title{font-size:18px;font-weight:800;color:#13294B;}
 .db-tolist{padding:9px 14px;border:1px solid #13294B;background:#fff;color:#13294B;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 .db-tolist:hover{background:#13294B;color:#fff;}
-.db-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-@media(max-width:1024px){.db-grid{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:768px){.db-grid{grid-template-columns:1fr;}.dashboard-wrap{padding:14px 14px calc(60px + env(safe-area-inset-bottom,0px));}}
-.db-card{background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(20,30,50,.04);}
+.db-grid{column-count:3;column-gap:14px;}
+@media(max-width:1024px){.db-grid{column-count:2;}}
+@media(max-width:768px){.db-grid{column-count:1;}.dashboard-wrap{padding:14px 14px calc(60px + env(safe-area-inset-bottom,0px));}}
+.db-card{background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(20,30,50,.04);break-inside:avoid;-webkit-column-break-inside:avoid;display:inline-block;width:100%;margin-bottom:14px;box-sizing:border-box;}
 .db-card.db-focus{border-color:#C9A24B;box-shadow:0 2px 10px rgba(201,162,75,.12);}
 .db-card-h{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:#13294B;margin-bottom:8px;}
 .db-open{padding:5px 10px;border:1px solid #d5dae2;background:#f6f7f9;color:#33405a;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;}
@@ -1512,7 +1519,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.6';
+const APP_VERSION = 'v2.16.7';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -3196,6 +3203,28 @@ function dbGoGrade(g){ dbResetFilters(); state.filterGrade=g; state.view='list';
 function dbGoType(t){ dbResetFilters(); state.filterType=t; state.view='list'; render(); }
 function dbGoStatus(st){ dbResetFilters(); state.filterStatus=st; state.view='list'; render(); }
 
+function statusFilterLabel(k){
+  if (STATUS_LABEL[k]) return STATUS_LABEL[k];
+  var m = { overdue_exp:'만기 지남', urgent_exp:'30일내 만기', soon_exp:'3개월내 만기', watch_exp:'6개월내 만기', contact_warn:'연락 요망' };
+  return m[k] || k;
+}
+function propMainLabel(k){ for (var i=0;i<PROP_MAIN.length;i++){ if (PROP_MAIN[i].key===k) return PROP_MAIN[i].label; } return k; }
+function filterChip(label, clearJS){
+  return '<span class="fb-chip">' + escapeHtmlT(label) + '<button class="fb-x" onclick="' + clearJS + ';render()">✕</button></span>';
+}
+function filterBarHtml(){
+  var chips = [];
+  if (state.filterGrade !== 'all')    chips.push(filterChip(state.filterGrade + '등급', "state.filterGrade='all'"));
+  if (state.filterType !== 'all')     chips.push(filterChip(TYPE_LABEL[state.filterType] || state.filterType, "state.filterType='all'"));
+  if (state.filterStatus !== 'all')   chips.push(filterChip(statusFilterLabel(state.filterStatus), "state.filterStatus='all'"));
+  if (state.filterPropMain !== 'all') chips.push(filterChip(propMainLabel(state.filterPropMain), "state.filterPropMain='all'"));
+  if (state.filterPropSub !== 'all')  chips.push(filterChip(state.filterPropSub, "state.filterPropSub='all'"));
+  if (state.search)                   chips.push(filterChip('검색: ' + state.search, "state.search=''"));
+  if (!chips.length) return '';
+  return '<div class="filter-bar"><span class="fb-label">걸린 필터</span>' + chips.join('')
+    + '<button class="fb-reset" onclick="dbResetFilters();render()">필터 초기화</button></div>';
+}
+
 function goHome() {
   ['sched-modal','focus-modal','followup-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
   state.view = (window.innerWidth > 768) ? 'dashboard' : 'list';
@@ -3263,7 +3292,7 @@ function renderDashboard(s) {
   var fuCard = '<div class="db-card"><div class="db-card-h"><span>🔄 팔로우업</span><button class="db-open" onclick="openFollowup()">열기</button></div>';
   if (fu.length) {
     fuCard += '<div class="db-big">' + fu.length + '<span>명 다시 챙기기</span></div>';
-    fu.slice(0,5).forEach(function(it){ fuCard += nameRow(it.c, '<span class="db-rowmeta">' + it.days + '일</span>'); });
+    fu.slice(0,8).forEach(function(it){ fuCard += nameRow(it.c, '<span class="db-rowmeta">' + it.days + '일</span>'); });
   } else { fuCard += '<div class="db-empty">모두 최근에 챙기셨어요 👍</div>'; }
   fuCard += '</div>';
 
@@ -3298,7 +3327,7 @@ function renderDashboard(s) {
   // 🗑 정리 후보
   var cleanCard = '<div class="db-card"><div class="db-card-h"><span>🗑 정리 후보</span><button class="db-open" onclick="openFocus()">열기</button></div>';
   if (fp.cleanup.length) {
-    fp.cleanup.slice(0,6).forEach(function(it){ cleanCard += nameRow(it.c, '<span class="db-rowmeta">' + it.tier.label + '</span>'); });
+    fp.cleanup.slice(0,8).forEach(function(it){ cleanCard += nameRow(it.c, '<span class="db-rowmeta">' + it.tier.label + '</span>'); });
   } else { cleanCard += '<div class="db-empty">정리할 고객이 없어요</div>'; }
   cleanCard += '</div>';
 
@@ -3526,6 +3555,7 @@ function render() {
 
   // ── 고객 목록 ──
   html += `<div class="list-wrap">`;
+  html += filterBarHtml();
   if(list.length === 0) {
     html += `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">조건에 맞는 고객이 없습니다</div></div>`;
   } else {

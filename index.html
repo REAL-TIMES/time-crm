@@ -1425,7 +1425,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.15.0';
+const APP_VERSION = 'v2.15.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2638,8 +2638,8 @@ function addLog() {
   c.contacts.unshift({date: state.logDate||today(), text: state.logText.trim(), topic: state.logTopic});
   c.lastContact = state.logDate||today();
   state.logText = '';
-  saveData();
   render();
+  persistAll('📞 상담기록이 저장됐어요');
 }
 
 function addSend() {
@@ -2649,8 +2649,8 @@ function addSend() {
   c.sends = c.sends || [];
   c.sends.unshift({date: state.sendDate||today(), content: state.sendContent.trim(), topic: state.sendTopic});
   state.sendContent = '';
-  saveData();
   render();
+  persistAll('📨 발송기록이 저장됐어요');
 }
 
 // ── 일정(schedules) ──
@@ -2713,17 +2713,16 @@ function saveContract() {
   const c = state.customers.find(x => x.id === state.selectedId);
   if (!c) return;
   c.contract = JSON.parse(JSON.stringify(state.contractDraft));
-  saveData();
-  showToast('계약 정보가 저장됐습니다 📝');
   render();
+  persistAll('📝 계약 정보가 저장됐어요');
 }
 
 function toggleCommission() {
   const c = state.customers.find(x => x.id === state.selectedId);
   if (!c || !c.contract) return;
   c.contract.commissionPaid = !c.contract.commissionPaid;
-  saveData();
   render();
+  persistAll('수수료 상태가 저장됐어요');
 }
 
 function contractDDayLabel(dateStr) {
@@ -2836,9 +2835,8 @@ function addVisit() {
   state.visitDate=''; state.visitBuilding=''; state.visitAddress='';
   state.visitDong=''; state.visitHo=''; state.visitFloor='';
   state.visitStars=0; state.visitFeedback=''; state.visitRequest='';
-  saveData();
-  showToast('투어 기록이 저장됐습니다 🏠');
   render();
+  persistAll('🏠 투어 기록이 저장됐어요');
 }
 
 function deleteLog(customerId, logIdx) {
@@ -2846,7 +2844,8 @@ function deleteLog(customerId, logIdx) {
   const c = state.customers.find(x => x.id === customerId);
   if (!c) return;
   c.contacts.splice(logIdx, 1);
-  saveData(); render();
+  render();
+  persistAll('상담기록이 삭제됐어요');
 }
 function startEditLog(logIdx, text) {
   state.editingLogId = logIdx;
@@ -2858,7 +2857,8 @@ function saveEditLog(customerId, logIdx) {
   if (!c) return;
   c.contacts[logIdx].text = state.editingLogText;
   state.editingLogId = null;
-  saveData(); render();
+  render();
+  persistAll('상담기록이 수정됐어요');
 }
 
 function deleteVisit(customerId, visitId) {
@@ -2866,8 +2866,8 @@ function deleteVisit(customerId, visitId) {
   const c = state.customers.find(x=>x.id===customerId);
   if(!c) return;
   c.visits = (c.visits||[]).filter(v=>v.id!==visitId);
-  saveData();
   render();
+  persistAll('투어 기록이 삭제됐어요');
 }
 
 function exportData() {
@@ -2883,9 +2883,8 @@ function importData(e) {
       const data = JSON.parse(ev.target.result);
       if(!Array.isArray(data)) throw new Error();
       state.customers = data;
-      saveData();
-      showToast(`${data.length}명 가져오기 완료`);
       render();
+      persistAll(`${data.length}명 가져오기 완료`);
     } catch(err) { showToast('파일 형식이 맞지 않습니다'); }
   };
   reader.readAsText(file);

@@ -501,10 +501,16 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .db-title{font-size:18px;font-weight:800;color:#13294B;}
 .db-tolist{padding:9px 14px;border:1px solid #13294B;background:#fff;color:#13294B;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 .db-tolist:hover{background:#13294B;color:#fff;}
-.db-grid{column-count:3;column-gap:14px;}
-@media(max-width:1024px){.db-grid{column-count:2;}}
-@media(max-width:768px){.db-grid{column-count:1;}.dashboard-wrap{padding:14px 14px calc(60px + env(safe-area-inset-bottom,0px));}}
-.db-card{background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(20,30,50,.04);break-inside:avoid;-webkit-column-break-inside:avoid;display:inline-block;width:100%;margin-bottom:14px;box-sizing:border-box;}
+.db-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;}
+@media(max-width:1024px){.db-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:768px){.db-grid{grid-template-columns:1fr;}.dashboard-wrap{padding:14px 14px calc(60px + env(safe-area-inset-bottom,0px));}}
+@media(min-width:769px){
+  .db-grid-top .db-card{height:430px;overflow-y:auto;}
+  .db-grid-bot .db-card{height:287px;overflow-y:auto;}
+  .db-card::-webkit-scrollbar{width:6px;}
+  .db-card::-webkit-scrollbar-thumb{background:#d5dae2;border-radius:3px;}
+}
+.db-card{background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;box-shadow:0 1px 3px rgba(20,30,50,.04);box-sizing:border-box;}
 .db-card.db-focus{border-color:#C9A24B;box-shadow:0 2px 10px rgba(201,162,75,.12);}
 .db-card-h{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800;color:#13294B;margin-bottom:8px;}
 .db-open{padding:5px 10px;border:1px solid #d5dae2;background:#f6f7f9;color:#33405a;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;}
@@ -545,6 +551,9 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #focus-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #focus-modal.show{display:flex;}
 @media(min-width:600px){#focus-modal{align-items:center;padding:20px;}}
+#cleanup-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
+#cleanup-modal.show{display:flex;}
+@media(min-width:600px){#cleanup-modal{align-items:center;padding:20px;}}
 .fu-tier.missed{background:#fbe0dd;color:#a52714;}
 .fu-detail{margin:2px 0 8px 32px;padding:8px 10px;background:#f6f7f9;border-radius:8px;font-size:12px;color:#33405a;line-height:1.65;}
 .fu-detail .fu-dl{display:inline-block;min-width:46px;font-weight:700;color:#8a93a2;}
@@ -894,6 +903,13 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
     <div class="fu-head"><div class="fu-title">🎯 오늘의 집중</div><button class="qa-x" onclick="closeFocus()">✕</button></div>
     <div class="fu-sub">매수·임차 고객만 봐요. <b>VIP 1명(큰 건)</b>에 먼저 집중하고, <b>QUICK 4명</b>을 빨리 처리하세요. 나머지는 오늘 잊으세요. 정리 후보는 과감히 보류·종료를 검토하세요.</div>
     <div id="focus-body"></div>
+  </div>
+</div>
+<div id="cleanup-modal">
+  <div class="fu-box">
+    <div class="fu-head"><div class="fu-title">🗑 정리 후보</div><button class="qa-x" onclick="closeCleanup()">✕</button></div>
+    <div class="fu-sub">오래 방치됐고 등급이 낮은 고객이에요. 과감히 <b>보류·종료</b>를 검토하세요. 정리하면 오늘의 집중이 더 또렷해져요.</div>
+    <div id="cleanup-body"></div>
   </div>
 </div>
 <div id="followup-modal">
@@ -1519,7 +1535,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.7';
+const APP_VERSION = 'v2.16.8';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2472,6 +2488,17 @@ function renderFocus() {
 }
 function openFocus() { renderFocus(); var m=document.getElementById('focus-modal'); if(m) m.classList.add('show'); }
 function closeFocus() { var m=document.getElementById('focus-modal'); if(m) m.classList.remove('show'); }
+function renderCleanup() {
+  var body = document.getElementById('cleanup-body');
+  if (!body) return;
+  var p = focusPools();
+  var html = '';
+  if (p.cleanup.length) { for (var k=0;k<p.cleanup.length;k++) html += cleanupItemHtml(p.cleanup[k]); }
+  else html = '<div class="fu-empty">정리할 고객이 없어요. 👍</div>';
+  body.innerHTML = html;
+}
+function openCleanup() { renderCleanup(); var m=document.getElementById('cleanup-modal'); if(m) m.classList.add('show'); }
+function closeCleanup() { var m=document.getElementById('cleanup-modal'); if(m) m.classList.remove('show'); }
 
 function fuRecentContacts(c) {
   var arr = (c.contacts || []).slice();
@@ -3226,7 +3253,7 @@ function filterBarHtml(){
 }
 
 function goHome() {
-  ['sched-modal','focus-modal','followup-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
+  ['sched-modal','focus-modal','followup-modal','cleanup-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
   state.view = (window.innerWidth > 768) ? 'dashboard' : 'list';
   render();
 }
@@ -3325,7 +3352,7 @@ function renderDashboard(s) {
     + '</div>';
 
   // 🗑 정리 후보
-  var cleanCard = '<div class="db-card"><div class="db-card-h"><span>🗑 정리 후보</span><button class="db-open" onclick="openFocus()">열기</button></div>';
+  var cleanCard = '<div class="db-card"><div class="db-card-h"><span>🗑 정리 후보</span><button class="db-open" onclick="openCleanup()">열기</button></div>';
   if (fp.cleanup.length) {
     fp.cleanup.slice(0,8).forEach(function(it){ cleanCard += nameRow(it.c, '<span class="db-rowmeta">' + it.tier.label + '</span>'); });
   } else { cleanCard += '<div class="db-empty">정리할 고객이 없어요</div>'; }
@@ -3343,7 +3370,8 @@ function renderDashboard(s) {
   return '<div class="dashboard-wrap">'
     + '<div class="db-top"><div class="db-title">📊 현황 대시보드</div>'
     + '<button class="db-tolist" onclick="state.view=\'list\';render()">전체 고객 목록 보기 →</button></div>'
-    + '<div class="db-grid">' + focusCard + schedCard + fuCard + numCard + cleanCard + expCard + '</div>'
+    + '<div class="db-grid db-grid-top">' + numCard + focusCard + schedCard + '</div>'
+    + '<div class="db-grid db-grid-bot">' + expCard + cleanCard + fuCard + '</div>'
     + '</div>';
 }
 

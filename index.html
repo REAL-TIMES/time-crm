@@ -1516,7 +1516,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.4';
+const APP_VERSION = 'v2.16.5';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2129,7 +2129,8 @@ function stats() {
     B: c.filter(x=>x.grade==='B').length,
     C: c.filter(x=>x.grade==='C').length,
     D: c.filter(x=>x.grade==='D').length,
-    urgent: c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d<=30;}).length,
+    overdue: c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d<0;}).length,
+    urgent: c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d>=0&&d<=30;}).length,
     soon:   c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d>30&&d<=90;}).length,
     watch:  c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d>90&&d<=180;}).length,
     potential: c.filter(x=>x.type==='potential').length,
@@ -2152,7 +2153,7 @@ function filtered() {
     // 휴지통 항목 숨김
     if (c.deleted) return false;
     // 종료 고객 숨김
-    if (!state.showClosed && (c.status||'received') === 'closed') return false;
+    if (!state.showClosed && (c.status||'received') === 'closed' && state.filterStatus !== 'closed') return false;
     // 등급 필터 ← 이게 빠져있었음
     if (state.filterGrade !== 'all' && c.grade !== state.filterGrade) return false;
     // 유형 필터
@@ -2161,8 +2162,10 @@ function filtered() {
     if (state.filterPropMain !== 'all' && (c.propMain||'') !== state.filterPropMain) return false;
     if (state.filterPropSub  !== 'all' && (c.propSub||'')  !== state.filterPropSub)  return false;
     // 상태 필터
-    if (state.filterStatus === 'urgent_exp') {
-      const d = daysTo(c.leaseExpiry); if (!(d !== null && d <= 30)) return false;
+    if (state.filterStatus === 'overdue_exp') {
+      const d = daysTo(c.leaseExpiry); if (!(d !== null && d < 0)) return false;
+    } else if (state.filterStatus === 'urgent_exp') {
+      const d = daysTo(c.leaseExpiry); if (!(d !== null && d >= 0 && d <= 30)) return false;
     } else if (state.filterStatus === 'soon_exp') {
       const d = daysTo(c.leaseExpiry); if (!(d !== null && d > 30 && d <= 90)) return false;
     } else if (state.filterStatus === 'watch_exp') {
@@ -3197,6 +3200,11 @@ function dbGoGrade(g){ dbResetFilters(); state.filterGrade=g; state.view='list';
 function dbGoType(t){ dbResetFilters(); state.filterType=t; state.view='list'; render(); }
 function dbGoStatus(st){ dbResetFilters(); state.filterStatus=st; state.view='list'; render(); }
 
+function goHome() {
+  ['sched-modal','focus-modal','followup-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
+  state.view = (window.innerWidth > 768) ? 'dashboard' : 'list';
+  render();
+}
 function renderDashboard(s) {
   var custs = (state.customers||[]).filter(function(x){ return !x.deleted; });
   var buyer = custs.filter(function(x){ return x.type==='buyer'; }).length;
@@ -3301,6 +3309,7 @@ function renderDashboard(s) {
   // ⏰ 만기 임박 (색상 배지)
   function expRow(label,val,key,color,bg){ return '<div class="db-exp" style="border-left:3px solid ' + color + '" onclick="dbGoStatus(\'' + key + '\')"><span class="db-exp-dot" style="background:' + color + '"></span><span class="db-exp-l">' + label + '</span><span class="db-exp-v" style="color:' + color + ';background:' + bg + '">' + val + '명</span></div>'; }
   var expCard = '<div class="db-card"><div class="db-card-h"><span>⏰ 만기 임박 (매도·임대)</span></div>'
+    + (s.overdue ? expRow('만기 지남', s.overdue, 'overdue_exp', '#c0392b', '#f7ddd9') : '')
     + expRow('30일 내', s.urgent, 'urgent_exp', '#e74c3c', '#fdecea')
     + expRow('3개월 내', s.soon, 'soon_exp', '#e67e22', '#fdf0e3')
     + expRow('6개월 내', s.watch, 'watch_exp', '#d4a017', '#fbf4da')
@@ -3322,7 +3331,7 @@ function render() {
 
   // ── 슬림 헤더 ──
   html += `<div class="header">
-    <div class="logo">
+    <div class="logo" onclick="goHome()" style="cursor:pointer" title="홈으로">
       <div class="logo-icon">T</div>
       <span class="logo-name">타임즈부동산 CRM</span>
     </div>
@@ -3381,13 +3390,16 @@ function render() {
 
   // 등급 인디케이터
   html += `<div class="sb-section"><div class="sb-section-title">등급별 현황</div><div class="sb-indicators">`;
-  [{k:'all',icon:'📊',lbl:'전체',num:s.total,color:'rgba(255,255,255,0.8)',bar:'rgba(255,255,255,0.3)'},
-   {k:'S',icon:'⭐',lbl:'S등급',num:s.S,color:'#ff8a80',bar:'#e74c3c'},
-   {k:'A',icon:'🔥',lbl:'A등급',num:s.A,color:'#ffcc80',bar:'#e67e22'},
-   {k:'B',icon:'💧',lbl:'B등급',num:s.B,color:'#80d8ff',bar:'#2980b9'},
-   {k:'C',icon:'🌿',lbl:'C등급',num:s.C,color:'#b9f6ca',bar:'#27ae60'},
+  const _gradeBase = state.showClosed ? state.customers.filter(x=>!x.deleted) : state.customers.filter(x=>!x.deleted && (x.status||'received')!=='closed');
+  const _gTotal = _gradeBase.length;
+  const _gc = (k)=> k==='all' ? _gTotal : _gradeBase.filter(x=>x.grade===k).length;
+  [{k:'all',icon:'📊',lbl:'전체',num:_gc('all'),color:'rgba(255,255,255,0.8)',bar:'rgba(255,255,255,0.3)'},
+   {k:'S',icon:'⭐',lbl:'S등급',num:_gc('S'),color:'#ff8a80',bar:'#e74c3c'},
+   {k:'A',icon:'🔥',lbl:'A등급',num:_gc('A'),color:'#ffcc80',bar:'#e67e22'},
+   {k:'B',icon:'💧',lbl:'B등급',num:_gc('B'),color:'#80d8ff',bar:'#2980b9'},
+   {k:'C',icon:'🌿',lbl:'C등급',num:_gc('C'),color:'#b9f6ca',bar:'#27ae60'},
   ].forEach(g => {
-    const pct = s.total > 0 ? Math.round(g.num/s.total*100) : 0;
+    const pct = _gTotal > 0 ? Math.round(g.num/_gTotal*100) : 0;
     html += `<div class="sb-indicator${state.filterGrade===g.k?' active':''}" onclick="state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';render()">
       <div class="sb-ind-icon">${g.icon}</div>
       <div class="sb-ind-info">
@@ -3402,7 +3414,8 @@ function render() {
 
   // 만기·연락 인디케이터
   html += `<div class="sb-section"><div class="sb-section-title">만기·연락 관리</div><div class="sb-indicators">`;
-  [{k:'urgent_exp',icon:'🔴',lbl:'30일내 만기',num:s.urgent,color:'#ff6b6b',bar:'#e74c3c'},
+  [{k:'overdue_exp',icon:'⛔',lbl:'만기 지남',num:s.overdue,color:'#ff8787',bar:'#c0392b'},
+   {k:'urgent_exp',icon:'🔴',lbl:'30일내 만기',num:s.urgent,color:'#ff6b6b',bar:'#e74c3c'},
    {k:'soon_exp',icon:'🔶',lbl:'3개월내 만기',num:s.soon,color:'#ffa94d',bar:'#e67e22'},
    {k:'watch_exp',icon:'🟡',lbl:'6개월내 만기',num:s.watch,color:'#ffd43b',bar:'#d4a017'},
    {k:'contact_warn',icon:'📵',lbl:'연락 요망',num:s.contactWarn,color:'#ff6b6b',bar:'#e74c3c'},

@@ -111,11 +111,13 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 .sb-select { width: 100%; padding: 7px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: #fff; font-size: 12px; font-family: inherit; cursor: pointer; -webkit-appearance: auto; appearance: auto; }
 .sb-select option, .sb-select optgroup { background: #1a2744; color: #fff; }
 .sb-select:focus { outline: none; border-color: var(--gold); }
-.sb-search { width: 100%; padding: 8px 10px 8px 30px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: rgba(255,255,255,0.85); font-size: 12px; font-family: inherit; }
+.sb-search { width: 100%; padding: 8px 28px 8px 30px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: rgba(255,255,255,0.85); font-size: 12px; font-family: inherit; }
 .sb-search:focus { outline: none; border-color: var(--gold); }
 .sb-search::placeholder { color: rgba(255,255,255,0.25); }
 .sb-search-wrap { position: relative; }
 .sb-search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 12px; color: rgba(255,255,255,0.3); }
+.sb-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: none; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); border-radius: 50%; font-size: 10px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.sb-search-clear:hover { background: rgba(255,255,255,0.22); color: #fff; }
 
 /* 사이드바 칩 필터 (매물 유형) */
 .sb-chips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -491,6 +493,8 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #focus-modal.show{display:flex;}
 @media(min-width:600px){#focus-modal{align-items:center;padding:20px;}}
 .fu-tier.missed{background:#fbe0dd;color:#a52714;}
+.fu-detail{margin:2px 0 8px 32px;padding:8px 10px;background:#f6f7f9;border-radius:8px;font-size:12px;color:#33405a;line-height:1.65;}
+.fu-detail .fu-dl{display:inline-block;min-width:46px;font-weight:700;color:#8a93a2;}
 #sched-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #sched-modal.show{display:flex;}
 @media(min-width:600px){#sched-modal{align-items:center;padding:20px;}}
@@ -1421,7 +1425,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.14.3';
+const APP_VERSION = 'v2.15.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1461,6 +1465,7 @@ let state = {
   sidebarOpen: (typeof window !== 'undefined' && window.innerWidth > 768),
   sortBy: 'registered',
   sortDir: 'desc',
+  fuExpanded: {},
   editingLogId: null,
   editingLogText: '',
   editingVisitId: null,
@@ -2351,18 +2356,43 @@ function renderFocus() {
 function openFocus() { renderFocus(); var m=document.getElementById('focus-modal'); if(m) m.classList.add('show'); }
 function closeFocus() { var m=document.getElementById('focus-modal'); if(m) m.classList.remove('show'); }
 
+function fuRecentContacts(c) {
+  var arr = (c.contacts || []).slice();
+  arr.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  if (!arr.length) return '기록 없음';
+  return arr.slice(0,2).map(function(x){
+    return fmtDateFull(x.date) + ' — ' + escapeHtmlT(x.text||'') + (x.topic ? ' (' + escapeHtmlT(x.topic) + ')' : '');
+  }).join('<br>');
+}
+function fuToggleDetail(id) {
+  if (!state.fuExpanded) state.fuExpanded = {};
+  state.fuExpanded[id] = !state.fuExpanded[id];
+  renderFollowup();
+}
 function fuItemHtml(c, days) {
   var g = c.grade || '';
   var dayTxt = days >= 99999 ? '연락 기록 없음' : (days + '일 경과');
   var typeLabel = TYPE_LABEL[c.type] || '';
+  var expanded = !!(state.fuExpanded && state.fuExpanded[c.id]);
+  var detail = '';
+  if (expanded) {
+    detail = '<div class="fu-detail">'
+      + '<div><span class="fu-dl">관심</span> ' + (c.interest ? escapeHtmlT(c.interest) : '-') + '</div>'
+      + '<div><span class="fu-dl">입주</span> ' + (c.moveTiming ? c.moveTiming : '-') + '</div>'
+      + '<div><span class="fu-dl">메모</span> ' + (c.notes ? escapeHtmlT(c.notes) : '-') + '</div>'
+      + '<div><span class="fu-dl">최근상담</span> ' + fuRecentContacts(c) + '</div>'
+      + '</div>';
+  }
   return '<div class="fu-item">'
     + '<div class="fu-row1">'
     + '<span class="fu-grade" style="background:' + gradeColor(g) + '">' + (g || '-') + '</span>'
     + '<span class="fu-name">' + escapeHtmlT(c.name || '(이름없음)') + '</span>'
     + '<span class="fu-days">' + dayTxt + '</span></div>'
     + '<div class="fu-meta">' + typeLabel + (c.interest ? ' · ' + escapeHtmlT(c.interest) : '') + '</div>'
+    + detail
     + '<div class="fu-btns">'
     + '<button class="b-call" onclick="fuCall(\'' + c.id + '\')">📞 전화</button>'
+    + '<button onclick="fuToggleDetail(\'' + c.id + '\')">' + (expanded ? '▴ 접기' : '▾ 상세') + '</button>'
     + '<button onclick="fuAction(\'' + c.id + '\',\'hold\')">⏸ 보류</button>'
     + '<button onclick="fuAction(\'' + c.id + '\',\'managing\')">🔁 관리</button>'
     + '<button onclick="fuAction(\'' + c.id + '\',\'closed\')">✅ 종료</button>'
@@ -2871,6 +2901,13 @@ function searchInput(val) {
     if (el) { el.focus(); el.setSelectionRange(val.length, val.length); }
   }, 150);
 }
+function searchClear() {
+  state.search = '';
+  clearTimeout(_searchTimer);
+  render();
+  const el = document.querySelector('.sb-search');
+  if (el) el.focus();
+}
 
 function render() {
   const app = document.getElementById('app');
@@ -2915,6 +2952,7 @@ function render() {
     <div class="sb-search-wrap">
       <span class="sb-search-icon">🔍</span>
       <input class="sb-search" placeholder="이름·연락처·관심매물" value="${state.search}" oninput="searchInput(this.value)">
+      ${state.search ? '<button class="sb-search-clear" onclick="searchClear()">✕</button>' : ''}
     </div>
   </div>`;
   html += `<div class="sb-section">

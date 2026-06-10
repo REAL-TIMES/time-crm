@@ -1200,6 +1200,7 @@ function enterApp() {
   document.getElementById('login-screen').style.display = 'none';
   try {
     loadData();
+    migrateGrades();
     render();
   } catch(e) {
     document.getElementById('app').innerHTML = `
@@ -1219,10 +1220,12 @@ function enterApp() {
       if (cloudCust && cloudCust.length > 0) {
         state.customers = cloudCust;
         if (cloudData && !Array.isArray(cloudData) && cloudData.generalSchedules) state.generalSchedules = cloudData.generalSchedules;
+        var _gm = migrateGrades();
         const json = JSON.stringify(crmBlob());
         try { localStorage.setItem(STORAGE, json); localStorage.setItem(STORAGE_BK, json); } catch(e) {}
         setSyncStatus('synced');
         render();
+        if (_gm) sbSave(); // D→C 이전분 클라우드 반영
         showToast('☁️ 클라우드에서 최신 데이터를 불러왔습니다');
       } else {
         await cloudSync('첫 동기화');
@@ -1640,7 +1643,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.5';
+const APP_VERSION = 'v2.17.6';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2265,7 +2268,6 @@ function stats() {
     A: c.filter(x=>x.grade==='A').length,
     B: c.filter(x=>x.grade==='B').length,
     C: c.filter(x=>x.grade==='C').length,
-    D: c.filter(x=>x.grade==='D').length,
     overdue: c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d<0;}).length,
     urgent: c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d>=0&&d<=30;}).length,
     soon:   c.filter(x=>{const d=daysTo(x.leaseExpiry);return d!==null&&d>30&&d<=90;}).length,
@@ -2328,7 +2330,7 @@ function filtered() {
     return true;
   }).sort((a, b) => {
     const dir = state.sortDir === 'asc' ? 1 : -1;
-    const GO = {S:0,A:1,B:2,C:3,D:4};
+    const GO = {S:0,A:1,B:2,C:3};
     switch (state.sortBy) {
       case 'grade':        return ((GO[a.grade]??9) - (GO[b.grade]??9)) * (state.sortDir==='asc' ? -1 : 1);
       case 'lastContact':  return ((a.lastContact?new Date(a.lastContact):new Date(0)) - (b.lastContact?new Date(b.lastContact):new Date(0))) * dir;
@@ -2508,7 +2510,21 @@ function followupCandidates() {
 }
 
 function gradeColor(g) {
-  return ({ S:'#C0392B', A:'#E07B39', B:'#2E7D9A', C:'#8a93a2', D:'#aab2bf' })[g] || '#8a93a2';
+  return ({ S:'#C0392B', A:'#E07B39', B:'#2E7D9A', C:'#8a93a2' })[g] || '#8a93a2';
+}
+// 등급 = 거래 확실성·가치 (시기와 별개 축). D 폐지(잠재의뢰는 고객유형이 담당).
+const GRADE_DESC = {
+  S: { title: '최우선·전속', desc: '전속 고객 / 놓친 매물 재도전 — 반드시 잡을 최우선' },
+  A: { title: '거래 확정',   desc: '거래 의사 확고 + 이전 기일 확정' },
+  B: { title: '적극 검토',   desc: '거래 의사 있고 여유 있게 매물 탐색 중' },
+  C: { title: '관망·투자',   desc: '투자·시세조사 목적, 좋은 매물 있으면 검토' },
+};
+function gradeTitle(g) { return GRADE_DESC[g] ? GRADE_DESC[g].title : ''; }
+// 구버전 D등급 → C로 자동 이전 (불러올 때 1회)
+function migrateGrades() {
+  var arr = state.customers || []; var changed = false;
+  for (var i=0;i<arr.length;i++) { if (arr[i].grade === 'D') { arr[i].grade = 'C'; changed = true; } }
+  return changed;
 }
 
 // ════════════════════════════════════════
@@ -3701,7 +3717,7 @@ function renderDashboard(s) {
   // 📊 숫자 요약 (색상 + 막대그래프 + 클릭 이동)
   function numCell(label,val,color,go){ return '<div class="db-num" onclick="' + go + '"><div class="db-num-v"' + (color?' style="color:'+color+'"':'') + '>' + val + '</div><div class="db-num-l">' + label + '</div></div>'; }
   function bar(label,val,max,color,go){ var pct = max>0 ? Math.round(val/max*100) : 0; return '<div class="db-bar" onclick="' + go + '"><span class="db-bar-l">' + label + '</span><span class="db-bar-track"><span class="db-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></span><span class="db-bar-v">' + val + '</span></div>'; }
-  var gMax = Math.max(s.S,s.A,s.B,s.C,s.D,1);
+  var gMax = Math.max(s.S,s.A,s.B,s.C,1);
   var tMax = Math.max(buyer,tenant,seller,landlord,1);
   var numCard = '<div class="db-card"><div class="db-card-h"><span>📊 숫자 요약</span></div>'
     + '<div class="db-num-grid">'
@@ -3716,7 +3732,6 @@ function renderDashboard(s) {
       + bar('A', s.A, gMax, gradeColor('A'), "dbGoGrade('A')")
       + bar('B', s.B, gMax, gradeColor('B'), "dbGoGrade('B')")
       + bar('C', s.C, gMax, gradeColor('C'), "dbGoGrade('C')")
-      + bar('D', s.D, gMax, gradeColor('D'), "dbGoGrade('D')")
     + '<div class="db-sub">유형 분포</div>'
       + bar('매수', buyer, tMax, '#1c4e8a', "dbGoType('buyer')")
       + bar('임차', tenant, tMax, '#2E7D9A', "dbGoType('tenant')")
@@ -4063,13 +4078,13 @@ function render() {
             </div>
             <div class="form-group">
               <label class="form-label">우선순위 등급</label>
-              <select class="form-input" onchange="state.editData.grade=this.value">
-                <option value="S"${d.grade==='S'?' selected':''}>S — 즉시 거래 가능</option>
-                <option value="A"${d.grade==='A'?' selected':''}>A — 높은 가능성</option>
-                <option value="B"${d.grade==='B'?' selected':''}>B — 잠재 고객</option>
-                <option value="C"${d.grade==='C'?' selected':''}>C — 관망 중</option>
-                <option value="D"${d.grade==='D'?' selected':''}>D — 장기 관리</option>
+              <select class="form-input" onchange="state.editData.grade=this.value;render()">
+                <option value="S"${d.grade==='S'?' selected':''}>S — 최우선·전속</option>
+                <option value="A"${d.grade==='A'?' selected':''}>A — 거래 확정</option>
+                <option value="B"${d.grade==='B'?' selected':''}>B — 적극 검토</option>
+                <option value="C"${d.grade==='C'?' selected':''}>C — 관망·투자</option>
               </select>
+              ${GRADE_DESC[d.grade]?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${GRADE_DESC[d.grade].desc}</div>`:''}
             </div>
             <div class="form-group full">
               <label class="form-label">준비 단계</label>
@@ -4197,7 +4212,7 @@ function render() {
         ${aiPanelHtml(sel)}
         <div class="info-grid">
           <div class="info-card"><div class="info-lbl">유형</div><div class="info-val"><span class="tag ${TYPE_CLASS[sel.type]||''}">${TYPE_LABEL[sel.type]||sel.type}</span></div></div>
-          <div class="info-card"><div class="info-lbl">등급</div><div class="info-val"><span class="grade-badge grade-${sel.grade}" style="display:inline-flex;width:28px;height:28px;font-size:12px">${sel.grade}</span></div></div>
+          <div class="info-card"><div class="info-lbl">등급</div><div class="info-val"><span class="grade-badge grade-${sel.grade}" style="display:inline-flex;width:28px;height:28px;font-size:12px">${sel.grade}</span>${gradeTitle(sel.grade)?` <span style="font-size:12px;color:var(--text2)">${gradeTitle(sel.grade)}</span>`:''}</div></div>
           ${sel.propMain ? `<div class="info-card" style="grid-column:1/-1"><div class="info-lbl">매물 유형</div><div class="info-val"><span class="prop-badge" style="font-size:13px;padding:4px 10px;">${propMainIcon(sel.propMain)} ${propMainLabel(sel.propMain)}${sel.propSub?' &nbsp;›&nbsp; '+sel.propSub:''}</span></div></div>` : ''}
           <div class="info-card" style="grid-column:1/-1"><div class="info-lbl">진행 상태</div><div class="info-val"><span class="status-badge ${STATUS_CLASS[cStatus2]||'status-received'}">${STATUS_ICON[cStatus2]||''} ${STATUS_LABEL[cStatus2]||cStatus2}</span></div></div>
           <div class="info-card"><div class="info-lbl">준비 단계</div><div class="info-val"><span class="card-stage ${STAGE_CLASS[sel.stage||0]}">${STAGES[sel.stage||0]}</span></div></div>

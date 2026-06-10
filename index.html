@@ -121,11 +121,13 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 
 /* 사이드바 칩 필터 (매물 유형) */
 .sb-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.sb-stats { display: flex; flex-wrap: wrap; gap: 5px; }
-.sb-stat { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 13px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.62); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
-.sb-stat:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); }
+.sb-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr)); gap: 6px; }
+.sb-stats-wide { grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); }
+.sb-stat { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px; border-radius: 8px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); cursor: pointer; transition: all 0.15s; text-align: center; }
+.sb-stat:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.9); }
 .sb-stat.active { background: rgba(201,169,110,0.18); border-color: var(--gold); color: var(--gold); }
-.sb-stat .n { font-weight: 800; }
+.sb-stat .l { font-size: 13px; font-weight: 600; line-height: 1.15; word-break: keep-all; }
+.sb-stat .n { font-size: 20px; font-weight: 800; line-height: 1.1; }
 .sb-chip { padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 600; border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.5); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
 .sb-chip:hover  { border-color: var(--gold); color: rgba(255,255,255,0.8); }
 .sb-chip.active { background: rgba(201,169,110,0.2); border-color: var(--gold); color: var(--gold); }
@@ -1638,7 +1640,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.4';
+const APP_VERSION = 'v2.17.5';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -3828,19 +3830,19 @@ function render() {
   // 등급별
   html += `<div class="sb-section"><div class="sb-section-title">등급별 현황</div><div class="sb-stats">`;
   [{k:'all',lbl:'전체',color:'#fff'},{k:'S',lbl:'S',color:'#ff8a80'},{k:'A',lbl:'A',color:'#ffcc80'},{k:'B',lbl:'B',color:'#80d8ff'},{k:'C',lbl:'C',color:'#b9f6ca'}].forEach(g=>{
-    html += `<div class="sb-stat${state.filterGrade===g.k?' active':''}" onclick="state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';render()">${g.lbl} <span class="n" style="color:${g.color}">${_gc(g.k)}</span></div>`;
+    html += `<div class="sb-stat${state.filterGrade===g.k?' active':''}" onclick="state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';render()"><span class="l">${g.lbl}</span><span class="n" style="color:${g.color}">${_gc(g.k)}</span></div>`;
   });
   html += `</div></div>`;
 
   // 만기·연락
-  html += `<div class="sb-section"><div class="sb-section-title">만기 · 연락 관리</div><div class="sb-stats">`;
+  html += `<div class="sb-section"><div class="sb-section-title">만기 · 연락 관리</div><div class="sb-stats sb-stats-wide">`;
   [{k:'overdue_exp',lbl:'⛔만기지남',num:s.overdue,color:'#ff8787'},
    {k:'urgent_exp',lbl:'🔴30일',num:s.urgent,color:'#ff6b6b'},
    {k:'soon_exp',lbl:'🔶3개월',num:s.soon,color:'#ffa94d'},
    {k:'watch_exp',lbl:'🟡6개월',num:s.watch,color:'#ffd43b'},
    {k:'contact_warn',lbl:'📵연락요망',num:s.contactWarn,color:'#ff6b6b'},
   ].forEach(e=>{
-    html += `<div class="sb-stat${state.filterStatus===e.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${e.k}'?'all':'${e.k}';render()">${e.lbl} <span class="n" style="color:${e.color}">${e.num}</span></div>`;
+    html += `<div class="sb-stat${state.filterStatus===e.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${e.k}'?'all':'${e.k}';render()"><span class="l">${e.lbl}</span><span class="n" style="color:${e.color}">${e.num}</span></div>`;
   });
   html += `</div></div>`;
 
@@ -3848,15 +3850,15 @@ function render() {
   html += `<div class="sb-section"><div class="sb-section-title">진행 상태</div><div class="sb-stats">`;
   [{k:'received',lbl:'접수',color:'#80d8ff'},{k:'started',lbl:'착수',color:'#d8b4fe'},{k:'contracting',lbl:'계약',color:'#ffa94d'},{k:'managing',lbl:'관리',color:'#86efac'},{k:'hold',lbl:'보류',color:'rgba(255,255,255,0.55)'},{k:'closed',lbl:'종료',color:'#69db7c'}].forEach(st=>{
     const num=_nd.filter(x=>(x.status||'received')===st.k).length;
-    html += `<div class="sb-stat${state.filterStatus===st.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${st.k}'?'all':'${st.k}';render()">${st.lbl} <span class="n" style="color:${st.color}">${num}</span></div>`;
+    html += `<div class="sb-stat${state.filterStatus===st.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${st.k}'?'all':'${st.k}';render()"><span class="l">${st.lbl}</span><span class="n" style="color:${st.color}">${num}</span></div>`;
   });
   html += `</div></div>`;
 
   // 고객 유형 (버튼)
   const _tc = (k)=> k==='all' ? _nd.length : _nd.filter(x=>x.type===k).length;
-  html += `<div class="sb-section"><div class="sb-section-title">고객 유형</div><div class="sb-stats">`;
+  html += `<div class="sb-section"><div class="sb-section-title">고객 유형</div><div class="sb-stats sb-stats-wide">`;
   [{k:'all',lbl:'전체'},{k:'buyer',lbl:'매수'},{k:'seller',lbl:'매도'},{k:'tenant',lbl:'임차'},{k:'landlord',lbl:'임대'},{k:'potential',lbl:'잠재'},{k:'partner_agency',lbl:'협력부동산'},{k:'partner_dev',lbl:'분양대행'},{k:'partner_build',lbl:'시행·시공'},{k:'partner_finance',lbl:'금융·법무'}].forEach(t=>{
-    html += `<div class="sb-stat${state.filterType===t.k?' active':''}" onclick="state.filterType=state.filterType==='${t.k}'?'all':'${t.k}';render()">${t.lbl} <span class="n">${_tc(t.k)}</span></div>`;
+    html += `<div class="sb-stat${state.filterType===t.k?' active':''}" onclick="state.filterType=state.filterType==='${t.k}'?'all':'${t.k}';render()"><span class="l">${t.lbl}</span><span class="n">${_tc(t.k)}</span></div>`;
   });
   html += `</div></div>`;
 

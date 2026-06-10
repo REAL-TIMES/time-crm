@@ -552,6 +552,20 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .db-num:hover{background:#e9edf2;}
 .db-num-v{font-size:17px;font-weight:800;color:#13294B;}
 .db-num-l{font-size:10.5px;color:#8a93a2;font-weight:600;margin-top:1px;}
+.db-outcome{display:flex;align-items:center;justify-content:space-between;padding:8px 11px;border-radius:9px;background:#f3f0fb;color:#5b3fa0;font-size:12.5px;font-weight:700;cursor:pointer;}
+.db-outcome:hover{background:#ebe6f7;}
+.db-outcome-go{font-size:11.5px;color:#8a7cc0;}
+.oc-cmp{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.oc-col{border-radius:11px;padding:12px;}
+.oc-won{background:#e9f7ef;border:1px solid #b7e4c7;}
+.oc-lost{background:#fdecea;border:1px solid #f5c6c0;}
+.oc-col-h{font-size:12px;font-weight:800;margin-bottom:6px;}
+.oc-big{font-size:24px;font-weight:800;}
+.oc-big span{font-size:12px;font-weight:600;color:#8a93a2;margin-left:4px;}
+.oc-avg{font-size:12px;color:#33405a;margin-top:4px;}
+.oc-sec-h{font-size:11.5px;font-weight:800;color:#5b3fa0;margin:10px 0 5px;}
+.oc-bd{font-size:12px;color:#33405a;line-height:1.7;}
+.oc-empty{padding:18px 4px;text-align:center;color:#9aa3b2;font-size:12.5px;line-height:1.6;}
 .db-bar{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:11.5px;cursor:pointer;padding:2px 4px;border-radius:7px;}
 .db-bar:hover{background:#f6f7f9;}
 .db-pill-click{cursor:pointer;}
@@ -573,6 +587,9 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #cleanup-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
 #cleanup-modal.show{display:flex;}
 @media(min-width:600px){#cleanup-modal{align-items:center;padding:20px;}}
+#outcome-modal{position:fixed;inset:0;background:rgba(10,18,33,.6);z-index:9999;display:none;align-items:flex-end;justify-content:center;}
+#outcome-modal.show{display:flex;}
+@media(min-width:600px){#outcome-modal{align-items:center;padding:20px;}}
 .fu-tier.missed{background:#fbe0dd;color:#a52714;}
 .fu-detail{margin:2px 0 8px 32px;padding:8px 10px;background:#f6f7f9;border-radius:8px;font-size:12px;color:#33405a;line-height:1.65;}
 .fu-detail .fu-dl{display:inline-block;min-width:46px;font-weight:700;color:#8a93a2;}
@@ -937,6 +954,13 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
     <div class="fu-head"><div class="fu-title">🗑 정리 후보</div><button class="qa-x" onclick="closeCleanup()">✕</button></div>
     <div class="fu-sub">오래 방치됐고 등급이 낮은 고객이에요. 과감히 <b>보류·종료</b>를 검토하세요. 정리하면 오늘의 집중이 더 또렷해져요.</div>
     <div id="cleanup-body"></div>
+  </div>
+</div>
+<div id="outcome-modal">
+  <div class="fu-box">
+    <div class="fu-head"><div class="fu-title">📈 배점 점검 (성과 기록)</div><button class="qa-x" onclick="closeOutcome()">✕</button></div>
+    <div class="fu-sub">계약·종료된 고객의 <b>당시 배점</b>이 자동으로 쌓여요. 성사된 고객과 종료된 고객의 등급·시기·난이도를 비교하면, 어떤 요소가 실제 성사와 관련 깊은지 보입니다. (충분히 쌓인 뒤 판단하세요)</div>
+    <div id="outcome-body"></div>
   </div>
 </div>
 <div id="followup-modal">
@@ -1565,7 +1589,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.17.0';
+const APP_VERSION = 'v2.17.1';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2321,6 +2345,7 @@ async function saveCustomer() {
     const i = state.customers.findIndex(x=>x.id===d.id);
     if(i>=0) state.customers[i] = d;
   }
+  snapshotOutcome(d);
   saveData();
   state.view = 'list';
   state.editData = null;
@@ -2416,6 +2441,42 @@ function gradeColor(g) {
 function daysSinceContact(c) {
   return daysSinceTouch(c);
 }
+// 계약/종료로 바뀌는 순간, 당시 배점 요소를 자동 박제 (나중에 객관적 배점 점검용)
+function snapshotOutcome(c) {
+  if (!c) return;
+  var st = c.status;
+  if (st === 'contracting' || st === 'closed') {
+    c.outcomeSnapshot = {
+      status: st,
+      at: today(),
+      grade: c.grade || '',
+      moveTiming: c.moveTiming || '',
+      difficulty: effectiveDifficulty(c) || '',
+      score: focusScore(c)
+    };
+  }
+}
+// 박제된 성과 데이터 집계 (성사=contracting, 종료=closed)
+function outcomeStats() {
+  var won = [], lost = [];
+  var arr = state.customers || [];
+  for (var i=0;i<arr.length;i++) {
+    var s = arr[i].outcomeSnapshot;
+    if (!s) continue;
+    if (s.status === 'contracting') won.push(s);
+    else if (s.status === 'closed') lost.push(s);
+  }
+  function avg(a){ if(!a.length) return 0; var t=0; for(var k=0;k<a.length;k++) t+=(a[k].score||0); return Math.round(t/a.length); }
+  function dist(a, field){ var m={}; for(var k=0;k<a.length;k++){ var v=a[k][field]||'-'; m[v]=(m[v]||0)+1; } return m; }
+  return {
+    won: won, lost: lost,
+    wonAvg: avg(won), lostAvg: avg(lost),
+    wonGrade: dist(won,'grade'), lostGrade: dist(lost,'grade'),
+    wonTiming: dist(won,'moveTiming'), lostTiming: dist(lost,'moveTiming'),
+    wonDiff: dist(won,'difficulty'), lostDiff: dist(lost,'difficulty')
+  };
+}
+
 function focusScore(c) {
   var gw = ({ S:1, A:0.75, B:0.5, C:0.25, D:0.1 })[c.grade];
   if (gw === undefined) gw = 0.25;
@@ -2501,6 +2562,7 @@ async function focusSetStatus(id, st) {
   var c = (state.customers||[]).find(function(x){ return x.id===id; });
   if (!c) return;
   c.status = st;
+  snapshotOutcome(c);
   renderFocus();
   render();
   await persistAll(st === 'closed' ? '✅ 종료로 변경' : '⏸️ 보류로 변경');
@@ -2538,6 +2600,31 @@ function renderCleanup() {
 }
 function openCleanup() { renderCleanup(); var m=document.getElementById('cleanup-modal'); if(m) m.classList.add('show'); }
 function closeCleanup() { var m=document.getElementById('cleanup-modal'); if(m) m.classList.remove('show'); }
+function renderOutcome() {
+  var body = document.getElementById('outcome-body'); if (!body) return;
+  var o = outcomeStats();
+  var tot = o.won.length + o.lost.length;
+  if (tot === 0) {
+    body.innerHTML = '<div class="oc-empty">아직 계약·종료된 고객이 없어요.<br>고객을 계약 또는 종료로 바꾸면 그 순간의 배점이 자동으로 쌓여요.<br>몇 건 쌓인 뒤 다시 열어보세요.</div>';
+    return;
+  }
+  function distLine(m){ var keys=Object.keys(m); if(!keys.length) return '-'; keys.sort(); return keys.map(function(k){ return (k||'-')+' '+m[k]; }).join(' · '); }
+  var html = '<div class="oc-cmp">'
+    + '<div class="oc-col oc-won"><div class="oc-col-h" style="color:#1e7e4f">🟢 성사(계약)</div><div class="oc-big">' + o.won.length + '<span>건</span></div><div class="oc-avg">평균 점수 ' + o.wonAvg + '</div></div>'
+    + '<div class="oc-col oc-lost"><div class="oc-col-h" style="color:#b03a2e">🔴 종료</div><div class="oc-big">' + o.lost.length + '<span>건</span></div><div class="oc-avg">평균 점수 ' + o.lostAvg + '</div></div>'
+    + '</div>'
+    + '<div class="oc-sec-h">등급 분포</div><div class="oc-bd">🟢 ' + distLine(o.wonGrade) + '<br>🔴 ' + distLine(o.lostGrade) + '</div>'
+    + '<div class="oc-sec-h">희망 시기 분포</div><div class="oc-bd">🟢 ' + distLine(o.wonTiming) + '<br>🔴 ' + distLine(o.lostTiming) + '</div>'
+    + '<div class="oc-sec-h">난이도 분포</div><div class="oc-bd">🟢 ' + distLine(o.wonDiff) + '<br>🔴 ' + distLine(o.lostDiff) + '</div>';
+  if (tot < 8) {
+    html += '<div class="oc-empty" style="margin-top:12px">표본이 ' + tot + '건이에요. 8~10건 이상 쌓이면 더 믿을 만해요. 지금은 참고만 하세요.</div>';
+  } else {
+    html += '<div class="oc-empty" style="margin-top:12px">성사 고객의 점수·등급·시기가 종료 고객과 뚜렷이 다르면, 그 요소의 가중치를 조정할 근거가 돼요.</div>';
+  }
+  body.innerHTML = html;
+}
+function openOutcome() { renderOutcome(); var m=document.getElementById('outcome-modal'); if(m) m.classList.add('show'); }
+function closeOutcome() { var m=document.getElementById('outcome-modal'); if(m) m.classList.remove('show'); }
 
 function fuRecentContacts(c) {
   var arr = (c.contacts || []).slice();
@@ -2650,6 +2737,7 @@ async function fuAction(id, act) {
   if (act === 'hold')          { c.status = 'hold';     msg = '⏸️ 보류로 변경'; }
   else if (act === 'managing') { c.status = 'managing'; msg = '🔁 관리로 변경'; }
   else if (act === 'closed')   { c.status = 'closed';   msg = '✅ 종료로 변경'; }
+  snapshotOutcome(c);
   renderFollowup();
   render();
   await persistAll(msg);
@@ -3464,7 +3552,7 @@ async function aiAdvise(cid){
 }
 
 function goHome() {
-  ['sched-modal','focus-modal','followup-modal','cleanup-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
+  ['sched-modal','focus-modal','followup-modal','cleanup-modal','outcome-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
   state.view = (window.innerWidth > 768) ? 'dashboard' : 'list';
   render();
 }
@@ -3560,6 +3648,10 @@ function renderDashboard(s) {
       + bar('임대', landlord, tMax, '#8a93a2', "dbGoType('landlord')")
     + '<div class="db-sub">진행</div>'
     + '<div class="db-stat-row"><span class="db-pill db-pill-click" onclick="dbGoStatus(\'contracting\')">계약 ' + s.contracting + '</span><span class="db-pill db-pill-click" onclick="dbGoStatus(\'hold\')">보류 ' + s.hold + '</span><span class="db-pill db-pill-click" onclick="dbGoStatus(\'closed\')">종료 ' + s.closed + '</span></div>'
+    + (function(){ var o = outcomeStats(); var tot = o.won.length + o.lost.length;
+        return '<div class="db-sub">성과 기록 <span style="font-weight:400;color:#9aa3b2">(배점 점검용·자동 누적)</span></div>'
+          + '<div class="db-outcome" onclick="openOutcome()"><span>📈 성사 ' + o.won.length + ' · 종료 ' + o.lost.length + '</span>'
+          + '<span class="db-outcome-go">' + (tot>0 ? '점검 ›' : '쌓이는 중') + '</span></div>'; })()
     + '</div>';
 
   // 🗑 정리 후보

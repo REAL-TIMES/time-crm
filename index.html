@@ -266,6 +266,8 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 .card-main { flex: 1; min-width: 0; }
 .card-name-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .card-name { font-size: 15px; font-weight: 600; }
+.card-nick { font-size: 12px; font-weight: 600; color: #8a93a2; }
+.card-status-sel { font-size: 11px; padding: 5px 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg2); color: var(--text); font-family: inherit; cursor: pointer; max-width: 92px; }
 .card-phone { font-size: 12px; color: var(--text2); margin-top: 2px; }
 .card-phone a:hover { color: var(--blue) !important; text-decoration: underline !important; }
 .card-interest { font-size: 12px; color: var(--text2); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1640,7 +1642,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.2';
+const APP_VERSION = 'v2.17.3';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2317,6 +2319,7 @@ function filtered() {
     if (state.search) {
       const q = state.search.toLowerCase();
       const hit = (c.name||'').toLowerCase().includes(q) ||
+                  (c.nickname||'').toLowerCase().includes(q) ||
                   (c.phone||'').includes(state.search) ||
                   (c.interest||'').toLowerCase().includes(q) ||
                   (c.notes||'').toLowerCase().includes(q);
@@ -2352,7 +2355,7 @@ function showToast(msg) {
 }
 
 function openAdd() {
-  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:'',moveImmediate:false,targetDate:''};
+  state.editData = {id:'',name:'',nickname:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:'',moveImmediate:false,targetDate:''};
   state.view = 'form';
   render();
 }
@@ -2365,7 +2368,24 @@ function openEdit(id) {
   render();
 }
 
+function quickSetStatus(id, st) {
+  var c = (state.customers||[]).find(function(x){ return x.id===id; });
+  if (!c) return;
+  var el = document.querySelector('.list-wrap'); var top = el ? el.scrollTop : 0;
+  c.status = st;
+  snapshotOutcome(c);
+  render();
+  var el2 = document.querySelector('.list-wrap'); if (el2) el2.scrollTop = top;
+  persistAll('진행 상태 변경: ' + (STATUS_LABEL[st]||st));
+}
+function restoreListScroll() {
+  var top = state._listScroll || 0;
+  var set = function(){ var el = document.querySelector('.list-wrap'); if (el) el.scrollTop = top; };
+  set();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set);
+}
 function openDetail(id) {
+  var le = document.querySelector('.list-wrap'); state._listScroll = le ? le.scrollTop : 0;
   state.selectedId = id;
   state.activeTab = 'info';
   state.logText = ''; state.logDate = today(); state.logTopic = TOPICS[0];
@@ -2383,7 +2403,7 @@ function openDetail(id) {
   render();
 }
 
-function closeView() { state.view = 'list'; state.editData = null; render(); }
+function closeView() { var fromDetail = (state.view === 'detail'); state.view = 'list'; state.editData = null; render(); if (fromDetail) restoreListScroll(); }
 
 function setTimingImmediate(){ var d=state.editData; if(!d)return; d.moveImmediate=true; d.targetDate=''; d.moveTiming=''; render(); }
 function setTimingUndecided(){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=''; d.moveTiming=''; render(); }
@@ -3975,7 +3995,7 @@ function render() {
           <div class="grade-badge grade-${c.grade}">${c.grade}</div>
           <div class="card-main">
             <div class="card-name-row">
-              <span class="card-name">${c.name}</span>${genderIcon?`<span style="font-size:14px">${genderIcon}</span>`:''}
+              <span class="card-name">${c.name}</span>${c.nickname?`<span class="card-nick">(${c.nickname})</span>`:''}${genderIcon?`<span style="font-size:14px">${genderIcon}</span>`:''}
               <span class="tag ${TYPE_CLASS[c.type]||''}">${TYPE_LABEL[c.type]||c.type}</span>
               <span class="status-badge ${STATUS_CLASS[cStatus]||'status-received'}">${STATUS_ICON[cStatus]||''} ${STATUS_LABEL[cStatus]||cStatus}</span>
             </div>
@@ -3991,6 +4011,9 @@ function render() {
         </div>
         ${elapsedHtml}${expiryBarHtml}
         <div class="card-actions">
+          <select class="card-status-sel" onclick="event.stopPropagation()" onchange="event.stopPropagation();quickSetStatus('${c.id}',this.value)">
+            ${Object.keys(STATUS_LABEL).map(k=>`<option value="${k}"${cStatus===k?' selected':''}>${STATUS_ICON[k]||''} ${STATUS_LABEL[k]}</option>`).join('')}
+          </select>
           <button class="btn btn-sm" onclick="event.stopPropagation();openEdit('${c.id}')">✏️ 수정</button>
           <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteCustomer('${c.id}')">🗑 삭제</button>
           <div style="flex:1"></div>
@@ -4027,6 +4050,11 @@ function render() {
             <div class="form-group">
               <label class="form-label">이름 *</label>
               <input class="form-input" value="${d.name||''}" oninput="state.editData.name=this.value" placeholder="고객 이름">
+            </div>
+            <div class="form-group full">
+              <label class="form-label">애칭 (선택)</label>
+              <input class="form-input" value="${d.nickname||''}" oninput="state.editData.nickname=this.value" placeholder="예: 원베일리 사장님, 김부장님">
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">이름과 함께 표시돼요. 기억하기 쉬운 별칭을 적어두면 찾기 편해요.</div>
             </div>
             <div class="form-group">
               <label class="form-label">성별</label>
@@ -4199,6 +4227,7 @@ function render() {
           <div class="info-card" style="grid-column:1/-1"><div class="info-lbl">진행 상태</div><div class="info-val"><span class="status-badge ${STATUS_CLASS[cStatus2]||'status-received'}">${STATUS_ICON[cStatus2]||''} ${STATUS_LABEL[cStatus2]||cStatus2}</span></div></div>
           <div class="info-card"><div class="info-lbl">준비 단계</div><div class="info-val"><span class="card-stage ${STAGE_CLASS[sel.stage||0]}">${STAGES[sel.stage||0]}</span></div></div>
           <div class="info-card"><div class="info-lbl">관심 매물</div><div class="info-val" style="font-size:12px">${sel.interest||'-'}</div></div>
+          ${(sel.type==='buyer'||sel.type==='tenant') ? `<div class="info-card"><div class="info-lbl">희망 시기</div><div class="info-val" style="font-size:12px">${timingLabel(sel)||'-'}</div></div>` : ''}
           <div class="info-card"><div class="info-lbl">임대차 만기</div><div class="info-val ${ex.cls.includes('urgent')?'urgent':ex.cls.includes('soon')?'soon':''}">${sel.leaseExpiry?`${fmtDateFull(sel.leaseExpiry)} (${days}일)`:'-'}</div></div>
           <div class="info-card"><div class="info-lbl">다음 팔로업</div><div class="info-val" style="color:var(--orange)">${sel.nextFollowUp?fmtDateFull(sel.nextFollowUp):'-'}</div></div>
           <div class="info-card"><div class="info-lbl">최근 연락</div><div class="info-val">${sel.lastContact?fmtDateFull(sel.lastContact):'-'}</div></div>
@@ -4745,7 +4774,7 @@ function render() {
         <div class="detail-header">
           <div class="grade-badge grade-${sel.grade}" style="flex-shrink:0">${sel.grade}</div>
           <div style="flex:1;min-width:0">
-            <div class="detail-name">${sel.name}</div>
+            <div class="detail-name">${sel.name}${sel.nickname?` <span style="font-size:13px;font-weight:500;opacity:.85">(${sel.nickname})</span>`:''}</div>
             <div class="detail-phone">${sel.phone} · ${TYPE_LABEL[sel.type]||sel.type}</div>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="closeView()">닫기</button>

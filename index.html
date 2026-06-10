@@ -515,6 +515,15 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .ai-acts li{font-size:13px;line-height:1.55;color:#33405a;margin-bottom:4px;}
 .ai-note{font-size:11px;color:#9a90b5;margin-top:8px;font-style:italic;}
 .ai-empty{font-size:12.5px;color:#9a90b5;line-height:1.6;}
+.tm-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.tm-q{padding:7px 12px;border:1px solid #d5dae2;background:#fff;color:#33405a;border-radius:18px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.tm-q.on{background:#13294B;color:#fff;border-color:#13294B;}
+.tm-q:hover{border-color:#13294B;}
+.tm-direct{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.tm-parts{display:flex;gap:4px;}
+.tm-p{padding:7px 12px;border:1px solid #d5dae2;background:#fff;color:#33405a;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.tm-p.on{background:#C9A24B;color:#fff;border-color:#C9A24B;}
+.tm-now{font-size:12px;color:#13294B;font-weight:700;margin-top:8px;}
 .dashboard-wrap{max-width:1180px;margin:0 auto;padding:16px 18px 60px;height:calc(100vh - 44px);height:calc(100dvh - 44px);overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .db-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
 .db-title{font-size:18px;font-weight:800;color:#13294B;}
@@ -1587,9 +1596,51 @@ function effectiveDifficulty(c) {
 }
 
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
-const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
+const TIMING_OPTS = ['즉시','3개월','6개월','미정']; // 구버전 라벨(폴백용)
+// 신버전: c.moveImmediate(즉시 토글) + c.targetDate(YYYY-MM-DD, 상5/중15/하25) 로 저장 → D-day 기준 점수
+function addMonthsYM(n) {                 // 오늘 기준 n개월 뒤의 'YYYY-MM-15'
+  var d = new Date(); d.setMonth(d.getMonth() + n);
+  var y = d.getFullYear(), m = d.getMonth()+1;
+  return y + '-' + (m<10?'0'+m:m) + '-15';
+}
+function timingDays(c) {                   // 목표일까지 남은 일수 (없으면 null)
+  if (c.moveImmediate) return 0;
+  if (c.targetDate) return daysTo(c.targetDate);
+  return null;
+}
+function timingWeight(c) {                  // 시기 가중치 0~1 (D-day 기준, 시간이 지나면 자동 상승)
+  if (c.moveImmediate) return 1;
+  if (c.targetDate) {
+    var days = daysTo(c.targetDate);
+    if (days === null) return 0.1;
+    if (days <= 7)   return 1;             // 1주 이내 또는 이미 지남(음수)
+    if (days <= 30)  return 0.85;          // 1개월
+    if (days <= 60)  return 0.7;           // 2개월
+    if (days <= 90)  return 0.55;          // 3개월
+    if (days <= 150) return 0.35;          // 4~5개월
+    if (days <= 180) return 0.25;          // 6개월
+    return 0.15;                           // 그 이상
+  }
+  // 구버전 라벨 폴백 (편집 전까지 기존 점수 유지)
+  var legacy = ({ '즉시':1, '3개월':0.55, '6개월':0.25, '미정':0.1 })[c.moveTiming];
+  return legacy === undefined ? 0.1 : legacy;
+}
+function timingPartLabel(day) { return day <= 8 ? '초' : day <= 18 ? '중순' : '말'; }
+function timingLabel(c) {                   // 화면 표시용
+  if (c.moveImmediate) return '⚡ 즉시';
+  if (c.targetDate) {
+    var dt = new Date(c.targetDate);
+    var base = (dt.getMonth()+1) + '월 ' + timingPartLabel(dt.getDate());
+    var days = daysTo(c.targetDate);
+    if (days === null) return base;
+    if (days < 0) return '⚠️ ' + base + ' (' + Math.abs(days) + '일 지남)';
+    return base + ' (D-' + days + ')';
+  }
+  if (c.moveTiming) return c.moveTiming; // 구버전 라벨
+  return '';
+}
 
-const APP_VERSION = 'v2.17.1';
+const APP_VERSION = 'v2.17.2';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2301,7 +2352,7 @@ function showToast(msg) {
 }
 
 function openAdd() {
-  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:''};
+  state.editData = {id:'',name:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:'',moveImmediate:false,targetDate:''};
   state.view = 'form';
   render();
 }
@@ -2333,6 +2384,12 @@ function openDetail(id) {
 }
 
 function closeView() { state.view = 'list'; state.editData = null; render(); }
+
+function setTimingImmediate(){ var d=state.editData; if(!d)return; d.moveImmediate=true; d.targetDate=''; d.moveTiming=''; render(); }
+function setTimingUndecided(){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=''; d.moveTiming=''; render(); }
+function setTimingMonthsFromNow(n){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=addMonthsYM(n); d.moveTiming=''; render(); }
+function setTimingMonth(ym){ var d=state.editData; if(!d||!ym)return; var day=d.targetDate?d.targetDate.slice(8,10):'15'; d.moveImmediate=false; d.targetDate=ym+'-'+(day||'15'); d.moveTiming=''; render(); }
+function setTimingPart(p){ var d=state.editData; if(!d)return; var dd=p<10?'0'+p:''+p; var ym; if(d.targetDate){ ym=d.targetDate.slice(0,7); } else { ym=addMonthsYM(0).slice(0,7); } d.moveImmediate=false; d.targetDate=ym+'-'+dd; d.moveTiming=''; render(); }
 
 async function saveCustomer() {
   const d = state.editData;
@@ -2480,8 +2537,7 @@ function outcomeStats() {
 function focusScore(c) {
   var gw = ({ S:1, A:0.75, B:0.5, C:0.25, D:0.1 })[c.grade];
   if (gw === undefined) gw = 0.25;
-  var tw = ({ '즉시':1, '3개월':0.66, '6개월':0.33, '미정':0.1 })[c.moveTiming];
-  if (tw === undefined) tw = 0.1;
+  var tw = timingWeight(c);
   var d = effectiveDifficulty(c);
   var dw = d === 'hard' ? 0.3 : d === 'mid' ? 0.6 : 1; // 어려울수록 낮게(쉬운 거래 우선)
   return Math.round(gw*50 + tw*30 + dw*20);
@@ -2527,7 +2583,7 @@ function focusItemHtml(c) {
   var d = effectiveDifficulty(c);
   var dlabel = d ? DIFF[d].label : '';
   var tlabel = TYPE_LABEL[c.type] || '';
-  var timing = c.moveTiming ? ' · ⏱ ' + c.moveTiming : '';
+  var _tl = timingLabel(c); var timing = _tl ? ' · ⏱ ' + _tl : '';
   return '<div class="fu-item">'
     + '<div class="fu-row1">'
     + '<span class="fu-grade" style="background:' + gradeColor(g) + '">' + (g || '-') + '</span>'
@@ -2663,7 +2719,7 @@ function fuItemHtml(c, days) {
     var draft = (state.fuLogDraft && state.fuLogDraft[c.id]) ? state.fuLogDraft[c.id] : '';
     detail = '<div class="fu-detail">'
       + '<div><span class="fu-dl">관심</span> ' + (c.interest ? escapeHtmlT(c.interest) : '-') + '</div>'
-      + '<div><span class="fu-dl">입주</span> ' + (c.moveTiming ? c.moveTiming : '-') + '</div>'
+      + '<div><span class="fu-dl">입주</span> ' + (timingLabel(c) || '-') + '</div>'
       + '<div><span class="fu-dl">메모</span> ' + (c.notes ? escapeHtmlT(c.notes) : '-') + '</div>'
       + '<div><span class="fu-dl">최근상담</span> ' + fuRecentContacts(c) + '</div>'
       + '</div>'
@@ -3478,7 +3534,7 @@ function buildAdviseText(c){
   if (c.propSub) prop.push(c.propSub);
   if (prop.length) L.push('매물: ' + prop.join(' '));
   if (c.interest) L.push('관심/조건: ' + aiScrub(c.interest));
-  if (c.moveTiming) L.push('희망 시기: ' + c.moveTiming);
+  var _tl2 = timingLabel(c); if (_tl2) L.push('희망 시기: ' + _tl2);
   if (c.leaseExpiry) L.push('임대차 만기일: ' + c.leaseExpiry);
   if (c.notes) L.push('메모: ' + aiScrub(c.notes));
   var byDate = function(a,b){ return (a.date||'').localeCompare(b.date||''); };
@@ -4060,11 +4116,27 @@ function render() {
             </div>
             <div class="form-group full">
               <label class="form-label">입주·거래 희망 시기 (시급성)</label>
-              <select class="form-input" onchange="state.editData.moveTiming=this.value">
-                <option value="">미입력</option>
-                ${TIMING_OPTS.map(t=>`<option value="${t}"${(d.moveTiming||'')===t?' selected':''}>${t}</option>`).join('')}
-              </select>
-              <div style="font-size:11px;color:var(--text3);margin-top:3px">'즉시'에 가까울수록 '오늘의 집중'에서 위로 올라와요.</div>
+              ${(function(){
+                var imm = !!d.moveImmediate, td = d.targetDate||'', none = !imm && !td;
+                var qb = function(label,on,js){ return '<button type="button" class="tm-q'+(on?' on':'')+'" onclick="'+js+'">'+label+'</button>'; };
+                var ym = td ? td.slice(0,7) : '';
+                var dayN = td ? parseInt(td.slice(8,10),10) : 15;
+                var part = function(p,label){ var pn={5:5,15:15,25:25}[p]; var on = td && dayN===pn; return '<button type="button" class="tm-p'+(on?' on':'')+'" onclick="setTimingPart('+p+')">'+label+'</button>'; };
+                return '<div class="tm-quick">'
+                    + qb('⚡ 즉시', imm, "setTimingImmediate()")
+                    + qb('1개월', false, "setTimingMonthsFromNow(1)")
+                    + qb('2개월', false, "setTimingMonthsFromNow(2)")
+                    + qb('3개월', false, "setTimingMonthsFromNow(3)")
+                    + qb('6개월', false, "setTimingMonthsFromNow(6)")
+                    + qb('미정', none, "setTimingUndecided()")
+                  + '</div>'
+                  + '<div class="tm-direct">'
+                    + '<input class="form-input" type="month" value="'+ym+'" onchange="setTimingMonth(this.value)" style="flex:0 0 150px">'
+                    + '<div class="tm-parts">' + part(5,'초') + part(15,'중순') + part(25,'말') + '</div>'
+                  + '</div>'
+                  + '<div class="tm-now">현재 설정: <b>' + (timingLabel(d) || '미설정') + '</b></div>';
+              })()}
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">목표 시기를 정하면 날짜가 다가올수록 '오늘의 집중' 점수가 자동으로 올라가요.</div>
             </div>` : ''}
             <div class="form-group full">
               <label class="form-label">관심 매물 (단지명·평형 등)</label>

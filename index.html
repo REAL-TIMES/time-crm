@@ -1646,7 +1646,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.9';
+const APP_VERSION = 'v2.17.10';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2425,11 +2425,35 @@ function openDetail(id) {
 
 function closeView() { var fromDetail = (state.view === 'detail'); state.view = 'list'; state.editData = null; render(); if (fromDetail) restoreListScroll(); }
 
-function setTimingImmediate(){ var d=state.editData; if(!d)return; d.moveImmediate=true; d.targetDate=''; d.moveTiming=''; render(); }
-function setTimingUndecided(){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=''; d.moveTiming=''; render(); }
-function setTimingMonthsFromNow(n){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=addMonthsYM(n); d.moveTiming=''; render(); }
-function setTimingMonth(ym){ var d=state.editData; if(!d||!ym)return; var day=d.targetDate?d.targetDate.slice(8,10):'15'; d.moveImmediate=false; d.targetDate=ym+'-'+(day||'15'); d.moveTiming=''; render(); }
-function setTimingPart(p){ var d=state.editData; if(!d)return; var dd=p<10?'0'+p:''+p; var ym; if(d.targetDate){ ym=d.targetDate.slice(0,7); } else { ym=addMonthsYM(0).slice(0,7); } d.moveImmediate=false; d.targetDate=ym+'-'+dd; d.moveTiming=''; render(); }
+function timingPickerHtml(d) {
+  var imm = !!d.moveImmediate, td = d.targetDate||'', none = !imm && !td;
+  var qb = function(label,on,js){ return '<button type="button" class="tm-q'+(on?' on':'')+'" onclick="'+js+'">'+label+'</button>'; };
+  var ym = td ? td.slice(0,7) : '';
+  var dayN = td ? parseInt(td.slice(8,10),10) : 15;
+  var part = function(p,label){ var pn={5:5,15:15,25:25}[p]; var on = td && dayN===pn; return '<button type="button" class="tm-p'+(on?' on':'')+'" onclick="setTimingPart('+p+')">'+label+'</button>'; };
+  return '<div class="tm-quick">'
+      + qb('⚡ 즉시', imm, "setTimingImmediate()")
+      + qb('1개월', false, "setTimingMonthsFromNow(1)")
+      + qb('2개월', false, "setTimingMonthsFromNow(2)")
+      + qb('3개월', false, "setTimingMonthsFromNow(3)")
+      + qb('6개월', false, "setTimingMonthsFromNow(6)")
+      + qb('미정', none, "setTimingUndecided()")
+    + '</div>'
+    + '<div class="tm-direct">'
+      + '<input class="form-input" type="month" value="'+ym+'" onchange="setTimingMonth(this.value)" style="flex:0 0 150px">'
+      + '<div class="tm-parts">' + part(5,'초') + part(15,'중순') + part(25,'말') + '</div>'
+    + '</div>'
+    + '<div class="tm-now">현재 설정: <b>' + (timingLabel(d) || '미설정') + '</b></div>';
+}
+function renderTimingBlock() {
+  var box = document.getElementById('timing-block');
+  if (box && state.editData) box.innerHTML = timingPickerHtml(state.editData);
+}
+function setTimingImmediate(){ var d=state.editData; if(!d)return; d.moveImmediate=true; d.targetDate=''; d.moveTiming=''; renderTimingBlock(); }
+function setTimingUndecided(){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=''; d.moveTiming=''; renderTimingBlock(); }
+function setTimingMonthsFromNow(n){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=addMonthsYM(n); d.moveTiming=''; renderTimingBlock(); }
+function setTimingMonth(ym){ var d=state.editData; if(!d||!ym)return; var day=d.targetDate?d.targetDate.slice(8,10):'15'; d.moveImmediate=false; d.targetDate=ym+'-'+(day||'15'); d.moveTiming=''; renderTimingBlock(); }
+function setTimingPart(p){ var d=state.editData; if(!d)return; var dd=p<10?'0'+p:''+p; var ym; if(d.targetDate){ ym=d.targetDate.slice(0,7); } else { ym=addMonthsYM(0).slice(0,7); } d.moveImmediate=false; d.targetDate=ym+'-'+dd; d.moveTiming=''; renderTimingBlock(); }
 
 async function saveCustomer() {
   const d = state.editData;
@@ -4145,26 +4169,7 @@ function render() {
             </div>
             <div class="form-group full">
               <label class="form-label">입주·거래 희망 시기 (시급성)</label>
-              ${(function(){
-                var imm = !!d.moveImmediate, td = d.targetDate||'', none = !imm && !td;
-                var qb = function(label,on,js){ return '<button type="button" class="tm-q'+(on?' on':'')+'" onclick="'+js+'">'+label+'</button>'; };
-                var ym = td ? td.slice(0,7) : '';
-                var dayN = td ? parseInt(td.slice(8,10),10) : 15;
-                var part = function(p,label){ var pn={5:5,15:15,25:25}[p]; var on = td && dayN===pn; return '<button type="button" class="tm-p'+(on?' on':'')+'" onclick="setTimingPart('+p+')">'+label+'</button>'; };
-                return '<div class="tm-quick">'
-                    + qb('⚡ 즉시', imm, "setTimingImmediate()")
-                    + qb('1개월', false, "setTimingMonthsFromNow(1)")
-                    + qb('2개월', false, "setTimingMonthsFromNow(2)")
-                    + qb('3개월', false, "setTimingMonthsFromNow(3)")
-                    + qb('6개월', false, "setTimingMonthsFromNow(6)")
-                    + qb('미정', none, "setTimingUndecided()")
-                  + '</div>'
-                  + '<div class="tm-direct">'
-                    + '<input class="form-input" type="month" value="'+ym+'" onchange="setTimingMonth(this.value)" style="flex:0 0 150px">'
-                    + '<div class="tm-parts">' + part(5,'초') + part(15,'중순') + part(25,'말') + '</div>'
-                  + '</div>'
-                  + '<div class="tm-now">현재 설정: <b>' + (timingLabel(d) || '미설정') + '</b></div>';
-              })()}
+              <div id="timing-block">${timingPickerHtml(d)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">목표 시기를 정하면 날짜가 다가올수록 '오늘의 집중' 점수가 자동으로 올라가요.</div>
             </div>` : ''}
             <div class="form-group full">

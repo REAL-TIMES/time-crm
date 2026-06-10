@@ -662,6 +662,9 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .fab { position: fixed; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); right: 20px; width: 52px; height: 52px; background: var(--navy); color: var(--gold); border: none; border-radius: 50%; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(26,26,46,0.4); z-index: 40; transition: all 0.2s; }
 .fab:hover { background: var(--navy-light); transform: scale(1.05); }
 .fab:active { transform: scale(0.95); }
+.scroll-top-btn { position: fixed; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); right: 18px; width: 46px; height: 46px; border-radius: 50%; background: var(--navy); color: var(--gold); border: 1px solid rgba(201,169,110,0.45); font-size: 20px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(19,41,75,0.35); z-index: 50; align-items: center; justify-content: center; transition: transform 0.15s, background 0.2s; }
+.scroll-top-btn:hover { background: var(--navy-light); }
+.scroll-top-btn:active { transform: scale(0.93); }
 
 /* Bottom nav area padding */
 .list-wrap { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
@@ -1643,7 +1646,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.7';
+const APP_VERSION = 'v2.17.8';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2357,6 +2360,7 @@ function showToast(msg) {
 }
 
 function openAdd() {
+  state._listScroll = 0;
   state.editData = {id:'',name:'',nickname:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:'',moveImmediate:false,targetDate:''};
   state.view = 'form';
   render();
@@ -2365,6 +2369,7 @@ function openAdd() {
 function openEdit(id) {
   const c = state.customers.find(x=>x.id===id);
   if(!c) return;
+  var le = document.querySelector('.list-wrap'); if (le) state._listScroll = le.scrollTop;
   state.editData = JSON.parse(JSON.stringify(c));
   state.view = 'form';
   render();
@@ -2382,9 +2387,18 @@ function quickSetStatus(id, st) {
 }
 function restoreListScroll() {
   var top = state._listScroll || 0;
-  var set = function(){ var el = document.querySelector('.list-wrap'); if (el) el.scrollTop = top; };
+  var set = function(){ var el = document.querySelector('.list-wrap'); if (el) { el.scrollTop = top; toggleScrollTopBtn(el); } };
   set();
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set);
+}
+function scrollListTop() {
+  var el = document.querySelector('.list-wrap');
+  if (el) { if (el.scrollTo) el.scrollTo({ top: 0, behavior: 'smooth' }); else el.scrollTop = 0; }
+}
+function toggleScrollTopBtn(el) {
+  var btn = document.getElementById('scroll-top-btn');
+  if (!btn) return;
+  btn.style.display = (el && el.scrollTop > 300) ? 'flex' : 'none';
 }
 function openDetail(id) {
   var le = document.querySelector('.list-wrap'); state._listScroll = le ? le.scrollTop : 0;
@@ -2429,6 +2443,7 @@ async function saveCustomer() {
   state.view = 'list';
   state.editData = null;
   render();
+  restoreListScroll();
   // 추가·수정도 클라우드에 즉시 반영 (새로고침 시 되돌아가지 않도록)
   if (hasSbConfig()) await cloudSync('고객 저장');
   else showToast('저장됐습니다');
@@ -3951,7 +3966,7 @@ function render() {
   }
 
   // ── 고객 목록 ──
-  html += `<div class="list-wrap">`;
+  html += `<div class="list-wrap" onscroll="toggleScrollTopBtn(this)">`;
   html += filterBarHtml();
   if(list.length === 0) {
     html += `<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">조건에 맞는 고객이 없습니다</div></div>`;
@@ -4013,6 +4028,7 @@ function render() {
     });
   }
   html += `</div>`;  // FAB 제거 - 상단바에 + 고객추가 버튼으로 대체
+  html += `<button id="scroll-top-btn" class="scroll-top-btn" style="display:none" onclick="scrollListTop()" title="맨 위로" aria-label="맨 위로">↑</button>`;
 
   // Form Modal
   if(state.view === 'form' && state.editData) {

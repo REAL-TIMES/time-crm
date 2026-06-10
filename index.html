@@ -121,6 +121,11 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 
 /* 사이드바 칩 필터 (매물 유형) */
 .sb-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.sb-stats { display: flex; flex-wrap: wrap; gap: 5px; }
+.sb-stat { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 13px; font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.62); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.sb-stat:hover { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); }
+.sb-stat.active { background: rgba(201,169,110,0.18); border-color: var(--gold); color: var(--gold); }
+.sb-stat .n { font-weight: 800; }
 .sb-chip { padding: 4px 9px; border-radius: 14px; font-size: 11px; font-weight: 600; border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.5); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
 .sb-chip:hover  { border-color: var(--gold); color: rgba(255,255,255,0.8); }
 .sb-chip.active { background: rgba(201,169,110,0.2); border-color: var(--gold); color: var(--gold); }
@@ -135,15 +140,6 @@ body { font-family: 'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-se
 
 /* 대시보드 인디케이터 (사이드바 내) */
 .sb-indicators { display: flex; flex-direction: column; gap: 6px; }
-.sb-indicator { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,255,255,0.05); border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
-.sb-indicator:hover { background: rgba(255,255,255,0.09); }
-.sb-indicator.active { background: rgba(201,169,110,0.12); border-color: rgba(201,169,110,0.3); }
-.sb-ind-icon { font-size: 16px; width: 28px; text-align: center; flex-shrink: 0; }
-.sb-ind-info { flex: 1; min-width: 0; }
-.sb-ind-label { font-size: 11px; color: rgba(255,255,255,0.5); }
-.sb-ind-num { font-size: 18px; font-weight: 800; line-height: 1; }
-.sb-ind-bar { height: 3px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 4px; overflow: hidden; }
-.sb-ind-bar-fill { height: 100%; border-radius: 3px; }
 
 /* 정렬 버튼 */
 .sb-sort-row { display: flex; gap: 5px; align-items: center; }
@@ -1642,7 +1638,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.3';
+const APP_VERSION = 'v2.17.4';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2281,6 +2277,7 @@ function stats() {
     partner: c.filter(x=>TYPE_IS_PARTNER(x.type)).length,
     contactWarn: c.filter(x => {
       if (SKIP_ELAPSED.has(x.status||'received')) return false;
+      if (x.type==='tenant' || x.type==='landlord' || x.type==='potential') return false;
       return daysSinceTouch(x) > 14;
     }).length,
     prop: propCounts,
@@ -2311,6 +2308,7 @@ function filtered() {
       const d = daysTo(c.leaseExpiry); if (!(d !== null && d > 90 && d <= 180)) return false;
     } else if (state.filterStatus === 'contact_warn') {
       if (SKIP_ELAPSED.has(c.status||'received')) return false;
+      if (c.type==='tenant' || c.type==='landlord' || c.type==='potential') return false;
       if (daysSinceTouch(c) <= 14) return false;
     } else if (state.filterStatus !== 'all') {
       if ((c.status||'received') !== state.filterStatus) return false;
@@ -3821,71 +3819,46 @@ function render() {
   </div>`;
 
   // 등급 인디케이터
-  html += `<div class="sb-section"><div class="sb-section-title">등급별 현황</div><div class="sb-indicators">`;
-  const _gradeBase = state.showClosed ? state.customers.filter(x=>!x.deleted) : state.customers.filter(x=>!x.deleted && (x.status||'received')!=='closed');
+  // ── 컴팩트 상황표 (칩) ──
+  const _nd = state.customers.filter(x=>!x.deleted);
+  const _gradeBase = state.showClosed ? _nd : _nd.filter(x=>(x.status||'received')!=='closed');
   const _gTotal = _gradeBase.length;
   const _gc = (k)=> k==='all' ? _gTotal : _gradeBase.filter(x=>x.grade===k).length;
-  [{k:'all',icon:'📊',lbl:'전체',num:_gc('all'),color:'rgba(255,255,255,0.8)',bar:'rgba(255,255,255,0.3)'},
-   {k:'S',icon:'⭐',lbl:'S등급',num:_gc('S'),color:'#ff8a80',bar:'#e74c3c'},
-   {k:'A',icon:'🔥',lbl:'A등급',num:_gc('A'),color:'#ffcc80',bar:'#e67e22'},
-   {k:'B',icon:'💧',lbl:'B등급',num:_gc('B'),color:'#80d8ff',bar:'#2980b9'},
-   {k:'C',icon:'🌿',lbl:'C등급',num:_gc('C'),color:'#b9f6ca',bar:'#27ae60'},
-  ].forEach(g => {
-    const pct = _gTotal > 0 ? Math.round(g.num/_gTotal*100) : 0;
-    html += `<div class="sb-indicator${state.filterGrade===g.k?' active':''}" onclick="state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';render()">
-      <div class="sb-ind-icon">${g.icon}</div>
-      <div class="sb-ind-info">
-        <div class="sb-ind-label">${g.lbl}</div>
-        <div class="sb-ind-num" style="color:${g.color}">${g.num}</div>
-        <div class="sb-ind-bar"><div class="sb-ind-bar-fill" style="width:${pct}%;background:${g.bar}"></div></div>
-      </div>
-      <span style="font-size:10px;color:rgba(255,255,255,0.3)">${pct}%</span>
-    </div>`;
+
+  // 등급별
+  html += `<div class="sb-section"><div class="sb-section-title">등급별 현황</div><div class="sb-stats">`;
+  [{k:'all',lbl:'전체',color:'#fff'},{k:'S',lbl:'S',color:'#ff8a80'},{k:'A',lbl:'A',color:'#ffcc80'},{k:'B',lbl:'B',color:'#80d8ff'},{k:'C',lbl:'C',color:'#b9f6ca'}].forEach(g=>{
+    html += `<div class="sb-stat${state.filterGrade===g.k?' active':''}" onclick="state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';render()">${g.lbl} <span class="n" style="color:${g.color}">${_gc(g.k)}</span></div>`;
   });
   html += `</div></div>`;
 
-  // 만기·연락 인디케이터
-  html += `<div class="sb-section"><div class="sb-section-title">만기·연락 관리</div><div class="sb-indicators">`;
-  [{k:'overdue_exp',icon:'⛔',lbl:'만기 지남',num:s.overdue,color:'#ff8787',bar:'#c0392b'},
-   {k:'urgent_exp',icon:'🔴',lbl:'30일내 만기',num:s.urgent,color:'#ff6b6b',bar:'#e74c3c'},
-   {k:'soon_exp',icon:'🔶',lbl:'3개월내 만기',num:s.soon,color:'#ffa94d',bar:'#e67e22'},
-   {k:'watch_exp',icon:'🟡',lbl:'6개월내 만기',num:s.watch,color:'#ffd43b',bar:'#d4a017'},
-   {k:'contact_warn',icon:'📵',lbl:'연락 요망',num:s.contactWarn,color:'#ff6b6b',bar:'#e74c3c'},
-  ].forEach(e => {
-    const pct = s.total > 0 ? Math.round(e.num/s.total*100) : 0;
-    html += `<div class="sb-indicator${state.filterStatus===e.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${e.k}'?'all':'${e.k}';render()">
-      <div class="sb-ind-icon">${e.icon}</div>
-      <div class="sb-ind-info">
-        <div class="sb-ind-label">${e.lbl}</div>
-        <div class="sb-ind-num" style="color:${e.color}">${e.num}</div>
-        <div class="sb-ind-bar"><div class="sb-ind-bar-fill" style="width:${pct}%;background:${e.bar}"></div></div>
-      </div>
-    </div>`;
+  // 만기·연락
+  html += `<div class="sb-section"><div class="sb-section-title">만기 · 연락 관리</div><div class="sb-stats">`;
+  [{k:'overdue_exp',lbl:'⛔만기지남',num:s.overdue,color:'#ff8787'},
+   {k:'urgent_exp',lbl:'🔴30일',num:s.urgent,color:'#ff6b6b'},
+   {k:'soon_exp',lbl:'🔶3개월',num:s.soon,color:'#ffa94d'},
+   {k:'watch_exp',lbl:'🟡6개월',num:s.watch,color:'#ffd43b'},
+   {k:'contact_warn',lbl:'📵연락요망',num:s.contactWarn,color:'#ff6b6b'},
+  ].forEach(e=>{
+    html += `<div class="sb-stat${state.filterStatus===e.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${e.k}'?'all':'${e.k}';render()">${e.lbl} <span class="n" style="color:${e.color}">${e.num}</span></div>`;
   });
   html += `</div></div>`;
 
-  // 진행 상태 인디케이터
-  html += `<div class="sb-section"><div class="sb-section-title">진행 상태</div><div class="sb-indicators">`;
-  [{k:'received',icon:'📥',lbl:'접수',color:'#80d8ff'},{k:'started',icon:'🚀',lbl:'착수',color:'#d8b4fe'},
-   {k:'contracting',icon:'📝',lbl:'계약',color:'#ffa94d'},{k:'managing',icon:'🔁',lbl:'관리',color:'#86efac'},
-   {k:'hold',icon:'⏸️',lbl:'보류',color:'rgba(255,255,255,0.35)'},{k:'closed',icon:'✅',lbl:'종료',color:'#69db7c'},
-  ].forEach(st => {
-    const num = state.customers.filter(x=>(x.status||'received')===st.k).length;
-    html += `<div class="sb-indicator${state.filterStatus===st.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${st.k}'?'all':'${st.k}';render()">
-      <div class="sb-ind-icon">${st.icon}</div>
-      <div class="sb-ind-info"><div class="sb-ind-label">${st.lbl}</div><div class="sb-ind-num" style="color:${st.color}">${num}</div></div>
-    </div>`;
+  // 진행 상태
+  html += `<div class="sb-section"><div class="sb-section-title">진행 상태</div><div class="sb-stats">`;
+  [{k:'received',lbl:'접수',color:'#80d8ff'},{k:'started',lbl:'착수',color:'#d8b4fe'},{k:'contracting',lbl:'계약',color:'#ffa94d'},{k:'managing',lbl:'관리',color:'#86efac'},{k:'hold',lbl:'보류',color:'rgba(255,255,255,0.55)'},{k:'closed',lbl:'종료',color:'#69db7c'}].forEach(st=>{
+    const num=_nd.filter(x=>(x.status||'received')===st.k).length;
+    html += `<div class="sb-stat${state.filterStatus===st.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${st.k}'?'all':'${st.k}';render()">${st.lbl} <span class="n" style="color:${st.color}">${num}</span></div>`;
   });
   html += `</div></div>`;
 
-  // 유형 필터
-  html += `<div class="sb-section"><div class="sb-section-title">고객 유형</div>
-    <select class="sb-select" onchange="state.filterType=this.value;render()">
-      <option value="all"${state.filterType==='all'?' selected':''}>전체</option>
-      <optgroup label="고객"><option value="buyer"${state.filterType==='buyer'?' selected':''}>매수</option><option value="seller"${state.filterType==='seller'?' selected':''}>매도</option><option value="tenant"${state.filterType==='tenant'?' selected':''}>임차</option><option value="landlord"${state.filterType==='landlord'?' selected':''}>임대</option><option value="potential"${state.filterType==='potential'?' selected':''}>잠재의뢰</option></optgroup>
-      <optgroup label="협력처"><option value="partner_agency"${state.filterType==='partner_agency'?' selected':''}>협력 부동산</option><option value="partner_dev"${state.filterType==='partner_dev'?' selected':''}>분양대행사</option><option value="partner_build"${state.filterType==='partner_build'?' selected':''}>시행·시공사</option><option value="partner_finance"${state.filterType==='partner_finance'?' selected':''}>금융·법무</option></optgroup>
-    </select>
-  </div>`;
+  // 고객 유형 (버튼)
+  const _tc = (k)=> k==='all' ? _nd.length : _nd.filter(x=>x.type===k).length;
+  html += `<div class="sb-section"><div class="sb-section-title">고객 유형</div><div class="sb-stats">`;
+  [{k:'all',lbl:'전체'},{k:'buyer',lbl:'매수'},{k:'seller',lbl:'매도'},{k:'tenant',lbl:'임차'},{k:'landlord',lbl:'임대'},{k:'potential',lbl:'잠재'},{k:'partner_agency',lbl:'협력부동산'},{k:'partner_dev',lbl:'분양대행'},{k:'partner_build',lbl:'시행·시공'},{k:'partner_finance',lbl:'금융·법무'}].forEach(t=>{
+    html += `<div class="sb-stat${state.filterType===t.k?' active':''}" onclick="state.filterType=state.filterType==='${t.k}'?'all':'${t.k}';render()">${t.lbl} <span class="n">${_tc(t.k)}</span></div>`;
+  });
+  html += `</div></div>`;
 
   // 매물 유형 칩
   html += `<div class="sb-section"><div class="sb-section-title">매물 유형</div><div class="sb-chips">

@@ -585,6 +585,14 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 #sched-modal.show{display:flex;}
 @media(min-width:600px){#sched-modal{align-items:center;padding:20px;}}
 .ag-item{background:var(--bg3);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.gen-add{margin-bottom:12px;}
+.gen-add-btn{width:100%;padding:10px;border:1.5px dashed #c4b5e8;background:#faf8ff;color:#6b21a8;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.gen-add-btn:hover{background:#f3eefe;}
+.gen-form{background:#faf8ff;border:1px solid #e2dcf0;border-radius:11px;padding:12px;}
+.gen-form-h{font-size:12.5px;font-weight:800;color:#6b21a8;margin-bottom:8px;}
+.gen-form-row{display:flex;gap:6px;flex-wrap:wrap;}
+.gen-form-btns{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;}
+.ag-gen{border-left:3px solid #7c3aed;}
 .cal-tabs{display:flex;gap:6px;margin-bottom:12px;}
 .cal-tab{flex:1;padding:8px 0;border:1px solid #d5dae2;background:#fff;color:#33405a;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
 .cal-tab.active{background:#13294B;color:#fff;border-color:#13294B;}
@@ -1174,9 +1182,11 @@ function enterApp() {
   setTimeout(async () => {
     if (hasSbConfig()) {
       const cloudData = await sbLoad();
-      if (cloudData && Array.isArray(cloudData) && cloudData.length > 0) {
-        state.customers = cloudData;
-        const json = JSON.stringify(cloudData);
+      var cloudCust = Array.isArray(cloudData) ? cloudData : (cloudData && cloudData.customers ? cloudData.customers : null);
+      if (cloudCust && cloudCust.length > 0) {
+        state.customers = cloudCust;
+        if (cloudData && !Array.isArray(cloudData) && cloudData.generalSchedules) state.generalSchedules = cloudData.generalSchedules;
+        const json = JSON.stringify(crmBlob());
         try { localStorage.setItem(STORAGE, json); localStorage.setItem(STORAGE_BK, json); } catch(e) {}
         setSyncStatus('synced');
         render();
@@ -1359,18 +1369,19 @@ function hasSbConfig() {
 async function sbSave(data) {
   if (!hasSbConfig()) return false;
   const cfg = getSbConfig();
+  const payload = crmBlob(); // 항상 state 전체(고객+중요일정)를 저장
   function patch() {
     return fetch(cfg.url + '/rest/v1/crm_data?id=eq.' + SB_ROW_ID, {
       method: 'PATCH',
       headers: sbHeaders({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ data: data }),
+      body: JSON.stringify({ data: payload }),
     });
   }
   function insert() {
     return fetch(cfg.url + '/rest/v1/crm_data', {
       method: 'POST',
       headers: sbHeaders({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ id: SB_ROW_ID, data: data }),
+      body: JSON.stringify({ id: SB_ROW_ID, data: payload }),
     });
   }
   try {
@@ -1531,8 +1542,8 @@ const STATUS_ICON = {
 };
 
 const SCHED_TYPES = ['상담','투어','통화','기타'];
-const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌' };
-const SCHED_COLOR = { '상담':'#2E7D9A', '투어':'#C77F1A', '통화':'#1c4e8a', '기타':'#8a93a2' };
+const SCHED_ICON = { '상담':'🤝', '투어':'🏠', '통화':'📞', '기타':'📌', '중요':'⭐' };
+const SCHED_COLOR = { '상담':'#2E7D9A', '투어':'#C77F1A', '통화':'#1c4e8a', '기타':'#8a93a2', '중요':'#7c3aed' };
 
 // ── 난이도(집중도): 매수·임차 고객의 '오늘의 집중' 선별용 ──
 const DIFF = { hard:{label:'🎯 어려움'}, mid:{label:'🟡 보통'}, easy:{label:'⚡ 쉬움'} };
@@ -1554,7 +1565,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.11';
+const APP_VERSION = 'v2.17.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1599,6 +1610,8 @@ let state = {
   schedView: 'list',
   schedRef: '',
   schedSelDay: '',
+  generalSchedules: [],
+  genAddOpen: false, genDate: '', genTime: '', genTitle: '', genMemo: '', editingGenId: null,
   editingLogId: null,
   editingLogText: '',
   editingVisitId: null,
@@ -1616,28 +1629,39 @@ let state = {
 function loadData() {
   try {
     const raw = localStorage.getItem(STORAGE);
-    if (raw) { state.customers = JSON.parse(raw); return; }
-    // 메인 없으면 shadow 복구 시도
+    if (raw) { normalizeLoaded(JSON.parse(raw)); return; }
     const shadow = localStorage.getItem(STORAGE_BK);
     if (shadow) {
-      state.customers = JSON.parse(shadow);
+      normalizeLoaded(JSON.parse(shadow));
       localStorage.setItem(STORAGE, shadow);
       showToast('⚠️ 보조 저장소에서 데이터를 복구했습니다');
       return;
     }
-    state.customers = getSampleData();
+    state.customers = getSampleData(); state.generalSchedules = [];
   } catch(e) {
     try {
       const shadow = localStorage.getItem(STORAGE_BK);
-      if (shadow) { state.customers = JSON.parse(shadow); showToast('⚠️ 복구 저장소에서 데이터를 불러왔습니다'); return; }
+      if (shadow) { normalizeLoaded(JSON.parse(shadow)); showToast('⚠️ 복구 저장소에서 데이터를 불러왔습니다'); return; }
     } catch(e2) {}
-    state.customers = getSampleData();
+    state.customers = getSampleData(); state.generalSchedules = [];
   }
 }
 
+function crmBlob() {
+  return { _v: 2, customers: state.customers || [], generalSchedules: state.generalSchedules || [] };
+}
+function normalizeLoaded(parsed) {
+  if (Array.isArray(parsed)) {                       // 구버전(배열) — 기존 데이터 그대로
+    state.customers = parsed;
+    if (!state.generalSchedules) state.generalSchedules = [];
+  } else if (parsed && typeof parsed === 'object') { // 신버전(객체)
+    state.customers = parsed.customers || [];
+    state.generalSchedules = parsed.generalSchedules || [];
+  }
+}
 function saveData() {
   try {
-    const json = JSON.stringify(state.customers);
+    const json = JSON.stringify(crmBlob());
     localStorage.setItem(STORAGE, json);
     localStorage.setItem(STORAGE_BK, json);
     const cnt = (parseInt(localStorage.getItem(CHANGE_CNT) || '0')) + 1;
@@ -2678,36 +2702,18 @@ function openGcal(cid, sid) {
   window.open(gcalUrl(s, c.name), '_blank');
 }
 function upcomingSchedules() {
-  var t = today(); var out = [];
-  var arr = state.customers || [];
-  for (var i=0;i<arr.length;i++) {
-    var c = arr[i]; if (c.deleted) continue;
-    var sch = c.schedules || [];
-    for (var j=0;j<sch.length;j++) {
-      var s = sch[j];
-      if (s.done || !s.date || s.date < t) continue;
-      out.push({ cid:c.id, cname:c.name, cphone:c.phone, s:s });
-    }
-  }
+  var t = today();
+  var out = allSchedules().filter(function(x){ return !x.s.done && x.s.date && x.s.date >= t; });
   out.sort(function(a,b){ return ((a.s.date+(a.s.time||''))).localeCompare(b.s.date+(b.s.time||'')); });
   return out;
 }
 function missedSchedules() {
-  var t = today(); var out = [];
-  var arr = state.customers || [];
-  for (var i=0;i<arr.length;i++) {
-    var c = arr[i]; if (c.deleted) continue;
-    var sch = c.schedules || [];
-    for (var j=0;j<sch.length;j++) {
-      var s = sch[j];
-      if (s.done || !s.date) continue;
-      if (s.date < t) out.push({ cid:c.id, cname:c.name, cphone:c.phone, s:s });
-    }
-  }
+  var t = today();
+  var out = allSchedules().filter(function(x){ return !x.s.done && x.s.date && x.s.date < t; });
   out.sort(function(a,b){ return ((b.s.date+(b.s.time||''))).localeCompare(a.s.date+(a.s.time||'')); });
   return out;
 }
-function openSchedAgenda() { state.schedRef = today(); state.schedSelDay = ''; renderSchedAgenda(); var m=document.getElementById('sched-modal'); if(m) m.classList.add('show'); }
+function openSchedAgenda() { state.schedRef = today(); state.schedSelDay = ''; state.genAddOpen = false; state.editingGenId = null; state.genTitle=''; state.genMemo=''; state.genTime=''; renderSchedAgenda(); var m=document.getElementById('sched-modal'); if(m) m.classList.add('show'); }
 function closeSchedAgenda() { var m=document.getElementById('sched-modal'); if(m) m.classList.remove('show'); }
 function schedPad2(n){ return n<10 ? '0'+n : ''+n; }
 function schedFmtDate(dt){ return dt.getFullYear() + '-' + schedPad2(dt.getMonth()+1) + '-' + schedPad2(dt.getDate()); }
@@ -2718,10 +2724,28 @@ function allSchedules() {
     var sch = c.schedules || [];
     for (var j=0;j<sch.length;j++) { if (sch[j].date) out.push({ cid:c.id, cname:c.name, cphone:c.phone, s:sch[j] }); }
   }
+  var g = state.generalSchedules || [];
+  for (var k=0;k<g.length;k++) {
+    if (!g[k].date) continue;
+    out.push({ cid:null, cname: g[k].title || '중요일정', general:true,
+      s: { sid:g[k].gid, date:g[k].date, time:g[k].time||'', type:'중요', memo:g[k].memo||'', place:'', done:!!g[k].done } });
+  }
   return out;
 }
 function schedItemHtml(x, isMissed) {
   var s = x.s;
+  if (x.general) {
+    return '<div class="ag-item ag-gen">'
+      + '<div class="ag-when">' + fmtDateFull(s.date) + (s.time ? ' · ' + toAmPm(s.time) : '') + (s.done?' · ✓ 완료':'') + '</div>'
+      + '<div class="ag-row"><span class="sch-type" style="background:#efe7fb;color:#6b21a8">⭐ 중요일정</span>'
+      + '<span class="ag-name" style="cursor:default">' + escapeHtmlT(x.cname||'') + '</span></div>'
+      + (s.memo ? '<div class="sch-sub">📝 ' + escapeHtmlT(s.memo) + '</div>' : '')
+      + '<div class="sch-btns">'
+        + '<button class="btn btn-sm" onclick="toggleGeneralDone(\'' + s.sid + '\')">' + (s.done?'↩ 완료취소':'✅ 완료') + '</button>'
+        + '<button class="btn btn-sm" onclick="startEditGeneral(\'' + s.sid + '\')">✏️ 수정</button>'
+        + '<button class="btn btn-sm btn-danger" onclick="deleteGeneralSchedule(\'' + s.sid + '\')">삭제</button>'
+      + '</div></div>';
+  }
   return '<div class="ag-item">'
     + '<div class="ag-when">' + fmtDateFull(s.date) + (s.time ? ' · ' + toAmPm(s.time) : '') + '</div>'
     + '<div class="ag-row">'
@@ -2820,7 +2844,8 @@ function schedWeekHtml() {
       + '<div class="wk-dayh' + (i===0?' sun':i===6?' sat':'') + '">' + dows[i] + ' · ' + fmtDateFull(ds) + (isToday?' (오늘)':'') + '</div>';
     if (list.length) {
       list.forEach(function(x){ var s = x.s;
-        body += '<div class="wk-chip" onclick="closeSchedAgenda();openDetail(\'' + x.cid + '\')">'
+        var click = x.general ? ('startEditGeneral(\'' + s.sid + '\')') : ('closeSchedAgenda();openDetail(\'' + x.cid + '\')');
+        body += '<div class="wk-chip" onclick="' + click + '">'
           + '<span class="wk-cdot" style="background:' + (SCHED_COLOR[s.type]||'#8a93a2') + '"></span>'
           + '<span class="wk-ctime">' + (s.time ? toAmPm(s.time) : '종일') + '</span>'
           + '<span class="wk-cname">' + (SCHED_ICON[s.type]||'📌') + ' ' + escapeHtmlT(x.cname||'') + '</span>'
@@ -2847,16 +2872,71 @@ function schedShift(dir) {
   state.schedSelDay = '';
   renderSchedAgenda();
 }
+function genAddFormHtml() {
+  var editing = !!state.editingGenId;
+  return '<div class="gen-form">'
+    + '<div class="gen-form-h">' + (editing ? '✏️ 중요일정 수정' : '⭐ 중요일정 추가') + '</div>'
+    + '<div class="gen-form-row">'
+      + '<input class="form-input" type="date" value="' + (state.genDate||today()) + '" onchange="state.genDate=this.value" style="flex:0 0 140px">'
+      + '<input class="form-input" type="time" value="' + (state.genTime||'') + '" onchange="state.genTime=this.value" style="flex:0 0 120px">'
+    + '</div>'
+    + '<input class="form-input" placeholder="제목 (예: 은행 방문, 세무사 미팅) *" value="' + escapeAttrT(state.genTitle||'') + '" oninput="state.genTitle=this.value" style="margin-top:6px;width:100%;box-sizing:border-box">'
+    + '<input class="form-input" placeholder="메모 (선택)" value="' + escapeAttrT(state.genMemo||'') + '" oninput="state.genMemo=this.value" style="margin-top:6px;width:100%;box-sizing:border-box">'
+    + '<div class="gen-form-btns">'
+      + '<button class="btn btn-sm" onclick="genAddToggle(false)">취소</button>'
+      + '<button class="btn btn-primary btn-sm" onclick="addGeneralSchedule()">' + (editing ? '수정 저장' : '저장') + '</button>'
+    + '</div></div>';
+}
+function genAddToggle(open) {
+  state.genAddOpen = open;
+  if (open && !state.genDate) state.genDate = today();
+  if (!open) { state.editingGenId = null; state.genTitle=''; state.genMemo=''; state.genTime=''; }
+  renderSchedAgenda();
+}
+function addGeneralSchedule() {
+  var title = (state.genTitle||'').trim();
+  if (!title) { showToast('제목을 입력해주세요'); return; }
+  state.generalSchedules = state.generalSchedules || [];
+  if (state.editingGenId) {
+    var g = state.generalSchedules.find(function(x){ return x.gid===state.editingGenId; });
+    if (g) { g.date = state.genDate||today(); g.time = state.genTime||''; g.title = title; g.memo = (state.genMemo||'').trim(); }
+    state.editingGenId = null;
+  } else {
+    state.generalSchedules.push({ gid:'g'+Date.now(), date:state.genDate||today(), time:state.genTime||'', title:title, memo:(state.genMemo||'').trim(), done:false });
+  }
+  state.genAddOpen = false; state.genTitle=''; state.genMemo=''; state.genTime='';
+  renderSchedAgenda(); render(); persistAll('⭐ 중요일정이 저장됐어요');
+}
+function startEditGeneral(gid) {
+  var g = (state.generalSchedules||[]).find(function(x){ return x.gid===gid; });
+  if (!g) return;
+  state.editingGenId = gid; state.genAddOpen = true;
+  state.genDate = g.date||today(); state.genTime = g.time||''; state.genTitle = g.title||''; state.genMemo = g.memo||'';
+  renderSchedAgenda();
+}
+function toggleGeneralDone(gid) {
+  var g = (state.generalSchedules||[]).find(function(x){ return x.gid===gid; });
+  if (!g) return;
+  g.done = !g.done;
+  renderSchedAgenda(); render(); persistAll(g.done ? '완료 처리됐어요' : '완료 취소됐어요');
+}
+function deleteGeneralSchedule(gid) {
+  if (!confirm('이 중요일정을 삭제하시겠습니까?')) return;
+  state.generalSchedules = (state.generalSchedules||[]).filter(function(x){ return x.gid!==gid; });
+  if (state.editingGenId === gid) { state.editingGenId = null; state.genAddOpen = false; }
+  renderSchedAgenda(); render(); persistAll('중요일정이 삭제됐어요');
+}
 function renderSchedAgenda() {
   var body = document.getElementById('sched-agenda-body'); if (!body) return;
   if (!state.schedView) state.schedView = 'list';
+  var addArea = '<div class="gen-add">' + (state.genAddOpen ? genAddFormHtml() : '<button class="gen-add-btn" onclick="genAddToggle(true)">＋ 중요일정 추가</button>') + '</div>';
   function tab(v,label){ return '<button class="cal-tab' + (state.schedView===v?' active':'') + '" onclick="schedSetView(\'' + v + '\')">' + label + '</button>'; }
   var tabs = '<div class="cal-tabs">' + tab('list','리스트') + tab('week','주') + tab('month','월') + '</div>';
   var content;
   if (state.schedView === 'week') content = schedWeekHtml();
   else if (state.schedView === 'month') content = schedMonthHtml();
   else content = schedListHtml();
-  body.innerHTML = tabs + content;
+  body.innerHTML = addArea + tabs + content;
 }
 async function agendaDone(cid, sid) {
   var c = (state.customers||[]).find(function(x){ return x.id===cid; });
@@ -3240,10 +3320,12 @@ function importData(e) {
   reader.onload = function(ev) {
     try {
       const data = JSON.parse(ev.target.result);
-      if(!Array.isArray(data)) throw new Error();
-      state.customers = data;
+      var cust = Array.isArray(data) ? data : (data && data.customers ? data.customers : null);
+      if (!cust) throw new Error();
+      state.customers = cust;
+      if (data && !Array.isArray(data) && data.generalSchedules) state.generalSchedules = data.generalSchedules;
       render();
-      persistAll(`${data.length}명 가져오기 완료`);
+      persistAll(`${cust.length}명 가져오기 완료`);
     } catch(err) { showToast('파일 형식이 맞지 않습니다'); }
   };
   reader.readAsText(file);

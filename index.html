@@ -1643,7 +1643,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.6';
+const APP_VERSION = 'v2.17.7';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -4087,15 +4087,6 @@ function render() {
               ${GRADE_DESC[d.grade]?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${GRADE_DESC[d.grade].desc}</div>`:''}
             </div>
             <div class="form-group full">
-              <label class="form-label">준비 단계</label>
-              <select class="form-input" onchange="state.editData.stage=parseInt(this.value)">
-                <option value="0"${(d.stage||0)===0?' selected':''}>시세 탐색 중</option>
-                <option value="1"${(d.stage||0)===1?' selected':''}>진지하게 검토 중</option>
-                <option value="2"${(d.stage||0)===2?' selected':''}>결정 임박</option>
-                <option value="3"${(d.stage||0)===3?' selected':''}>계약 완료</option>
-              </select>
-            </div>
-            <div class="form-group full">
               <label class="form-label">진행 상태</label>
               <select class="form-input" onchange="state.editData.status=this.value">
                 <option value="received"${(d.status||'received')==='received'?' selected':''}>📥 접수</option>
@@ -4215,7 +4206,6 @@ function render() {
           <div class="info-card"><div class="info-lbl">등급</div><div class="info-val"><span class="grade-badge grade-${sel.grade}" style="display:inline-flex;width:28px;height:28px;font-size:12px">${sel.grade}</span>${gradeTitle(sel.grade)?` <span style="font-size:12px;color:var(--text2)">${gradeTitle(sel.grade)}</span>`:''}</div></div>
           ${sel.propMain ? `<div class="info-card" style="grid-column:1/-1"><div class="info-lbl">매물 유형</div><div class="info-val"><span class="prop-badge" style="font-size:13px;padding:4px 10px;">${propMainIcon(sel.propMain)} ${propMainLabel(sel.propMain)}${sel.propSub?' &nbsp;›&nbsp; '+sel.propSub:''}</span></div></div>` : ''}
           <div class="info-card" style="grid-column:1/-1"><div class="info-lbl">진행 상태</div><div class="info-val"><span class="status-badge ${STATUS_CLASS[cStatus2]||'status-received'}">${STATUS_ICON[cStatus2]||''} ${STATUS_LABEL[cStatus2]||cStatus2}</span></div></div>
-          <div class="info-card"><div class="info-lbl">준비 단계</div><div class="info-val"><span class="card-stage ${STAGE_CLASS[sel.stage||0]}">${STAGES[sel.stage||0]}</span></div></div>
           <div class="info-card"><div class="info-lbl">관심 매물</div><div class="info-val" style="font-size:12px">${sel.interest||'-'}</div></div>
           ${(sel.type==='buyer'||sel.type==='tenant') ? `<div class="info-card"><div class="info-lbl">희망 시기</div><div class="info-val" style="font-size:12px">${timingLabel(sel)||'-'}</div></div>` : ''}
           <div class="info-card"><div class="info-lbl">임대차 만기</div><div class="info-val ${ex.cls.includes('urgent')?'urgent':ex.cls.includes('soon')?'soon':''}">${sel.leaseExpiry?`${fmtDateFull(sel.leaseExpiry)} (${days}일)`:'-'}</div></div>

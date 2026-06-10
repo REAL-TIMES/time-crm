@@ -1646,7 +1646,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.8';
+const APP_VERSION = 'v2.17.9';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2378,18 +2378,22 @@ function openEdit(id) {
 function quickSetStatus(id, st) {
   var c = (state.customers||[]).find(function(x){ return x.id===id; });
   if (!c) return;
-  var el = document.querySelector('.list-wrap'); var top = el ? el.scrollTop : 0;
+  var el = document.querySelector('.list-wrap'); state._listScroll = el ? el.scrollTop : (state._listScroll||0);
   c.status = st;
   snapshotOutcome(c);
   render();
-  var el2 = document.querySelector('.list-wrap'); if (el2) el2.scrollTop = top;
+  restoreListScroll();
   persistAll('진행 상태 변경: ' + (STATUS_LABEL[st]||st));
 }
 function restoreListScroll() {
   var top = state._listScroll || 0;
   var set = function(){ var el = document.querySelector('.list-wrap'); if (el) { el.scrollTop = top; toggleScrollTopBtn(el); } };
   set();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(set);
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function(){ set(); requestAnimationFrame(set); });
+  }
+  setTimeout(set, 60);
+  setTimeout(set, 160);
 }
 function scrollListTop() {
   var el = document.querySelector('.list-wrap');

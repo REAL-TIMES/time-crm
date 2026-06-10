@@ -358,6 +358,9 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .send-date { font-size: 11px; color: var(--text3); min-width: 70px; }
 .send-content { font-size: 12px; flex: 1; }
 .send-topic { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #f3e8fd; color: #7c3aed; }
+.send-item { flex-wrap: wrap; }
+.send-actions { flex: 0 0 100%; display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
+.send-act-btn { font-size: 11px; padding: 4px 11px; }
 
 /* Stats bar 2단 */
 .stats-bar-2 { display: flex; gap: 6px; overflow-x: auto; padding: 8px 16px 4px; scrollbar-width: none; background: var(--bg); border-bottom: 1px solid var(--border); }
@@ -917,7 +920,7 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 <div id="focus-modal">
   <div class="fu-box">
     <div class="fu-head"><div class="fu-title">🎯 오늘의 집중</div><button class="qa-x" onclick="closeFocus()">✕</button></div>
-    <div class="fu-sub">매수·임차 고객만 봐요. <b>VIP 1명(큰 건)</b>에 먼저 집중하고, <b>QUICK 4명</b>을 빨리 처리하세요. 나머지는 오늘 잊으세요. 정리 후보는 과감히 보류·종료를 검토하세요.</div>
+    <div class="fu-sub">매수·임차 고객만 봐요. <b>VIP(오늘 최우선)</b>부터 처리하고, <b>QUICK</b>을 이어서 빨리 치세요. 나머지는 오늘 잊으세요. 점수가 높을수록(등급↑·시기 임박·거래 쉬움) 위로 옵니다. 정리 후보는 과감히 보류·종료를 검토하세요.</div>
     <div id="focus-body"></div>
   </div>
 </div>
@@ -1551,7 +1554,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.9';
+const APP_VERSION = 'v2.16.11';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1602,7 +1605,7 @@ let state = {
   search: '',
   activeTab: 'info',
   logText: '', logDate: '', logTopic: '',
-  sendContent: '', sendDate: '', sendTopic: '',
+  sendContent: '', sendDate: '', sendTopic: '', editingSendIdx: null,
   // 임장 기록 입력 상태
   visitDate: '', visitBuilding: '', visitAddress: '',
   visitDong: '', visitHo: '', visitFloor: '',
@@ -2267,7 +2270,7 @@ function openDetail(id) {
   state.selectedId = id;
   state.activeTab = 'info';
   state.logText = ''; state.logDate = today(); state.logTopic = TOPICS[0];
-  state.sendContent = ''; state.sendDate = today(); state.sendTopic = TOPICS[0];
+  state.sendContent = ''; state.sendDate = today(); state.sendTopic = TOPICS[0]; state.editingSendIdx = null;
   state.schedDate = today(); state.schedTime = ''; state.schedType = '상담'; state.schedPlace = ''; state.schedMemo = '';
   state.view = 'detail';
   // 계약 draft 초기화
@@ -2395,7 +2398,7 @@ function focusScore(c) {
   var tw = ({ '즉시':1, '3개월':0.66, '6개월':0.33, '미정':0.1 })[c.moveTiming];
   if (tw === undefined) tw = 0.1;
   var d = effectiveDifficulty(c);
-  var dw = d === 'hard' ? 1 : d === 'mid' ? 0.6 : 0.3;
+  var dw = d === 'hard' ? 0.3 : d === 'mid' ? 0.6 : 1; // 어려울수록 낮게(쉬운 거래 우선)
   return Math.round(gw*50 + tw*30 + dw*20);
 }
 function cleanupTier(c) {
@@ -2425,18 +2428,14 @@ function focusPools(vipN, quickN) {
     if (ct) { cleanup.push({ c:c, tier:ct, days:daysSinceContact(c) }); continue; } // 정리 후보 먼저 분리
     pool.push(c);
   }
-  var hard = [], rest = [];
-  for (var j=0;j<pool.length;j++) {
-    if (effectiveDifficulty(pool[j]) === 'hard') hard.push(pool[j]); else rest.push(pool[j]);
-  }
   function byScore(a,b){ return focusScore(b) - focusScore(a); }
-  hard.sort(byScore); rest.sort(byScore);
+  var ranked = pool.slice().sort(byScore);
   var order = { close:0, review_close:1, review_hold:2 };
   cleanup.sort(function(a,b){
     if (order[a.tier.key] !== order[b.tier.key]) return order[a.tier.key] - order[b.tier.key];
     return b.days - a.days;
   });
-  return { vip: hard.slice(0,vipN), quick: rest.slice(0,quickN), cleanup: cleanup };
+  return { vip: ranked.slice(0,vipN), quick: ranked.slice(vipN, vipN+quickN), cleanup: cleanup };
 }
 function focusItemHtml(c) {
   var g = c.grade || '';
@@ -2488,7 +2487,7 @@ function renderFocus() {
   var p = focusPools();
   var html = '';
   if (p.vip.length) {
-    html += '<div class="fu-tier red">🎯 VIP — 오늘 집중할 큰 건</div>';
+    html += '<div class="fu-tier red">🎯 VIP — 오늘 최우선</div>';
     for (var i=0;i<p.vip.length;i++) html += focusItemHtml(p.vip[i]);
   }
   if (p.quick.length) {
@@ -2934,10 +2933,41 @@ function addSend() {
   const c = state.customers.find(x=>x.id===state.selectedId);
   if(!c) return;
   c.sends = c.sends || [];
-  c.sends.unshift({date: state.sendDate||today(), content: state.sendContent.trim(), topic: state.sendTopic});
+  const editing = (state.editingSendIdx !== null && state.editingSendIdx !== undefined);
+  if (editing && c.sends[state.editingSendIdx]) {
+    c.sends[state.editingSendIdx] = { date: state.sendDate||today(), content: state.sendContent.trim(), topic: state.sendTopic };
+    state.editingSendIdx = null;
+  } else {
+    c.sends.unshift({date: state.sendDate||today(), content: state.sendContent.trim(), topic: state.sendTopic});
+  }
   state.sendContent = '';
   render();
-  persistAll('📨 발송기록이 저장됐어요');
+  persistAll(editing ? '✏️ 발송기록이 수정됐어요' : '📨 발송기록이 저장됐어요');
+}
+function startEditSend(cid, idx) {
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.sends || !c.sends[idx]) return;
+  var s = c.sends[idx];
+  state.editingSendIdx = idx;
+  state.sendDate = s.date || today();
+  state.sendContent = s.content || '';
+  state.sendTopic = s.topic || TOPICS[0];
+  state.activeTab = 'send';
+  render();
+}
+function cancelEditSend() {
+  state.editingSendIdx = null;
+  state.sendContent = ''; state.sendDate = today(); state.sendTopic = TOPICS[0];
+  render();
+}
+function deleteSend(cid, idx) {
+  if (!confirm('이 발송 기록을 삭제하시겠습니까?')) return;
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c || !c.sends || !c.sends[idx]) return;
+  c.sends.splice(idx, 1);
+  if (state.editingSendIdx === idx) state.editingSendIdx = null;
+  render();
+  persistAll('발송 기록이 삭제됐어요');
 }
 
 // ── 일정(schedules) ──
@@ -3381,7 +3411,7 @@ function renderDashboard(s) {
   // 🎯 오늘의 집중
   var focusCard = '<div class="db-card db-focus"><div class="db-card-h"><span>🎯 오늘의 집중</span><button class="db-open" onclick="openFocus()">열기</button></div>';
   if (fp.vip.length || fp.quick.length) {
-    if (fp.vip.length) { focusCard += '<div class="db-sub">VIP · 큰 건</div>'; fp.vip.forEach(function(c){
+    if (fp.vip.length) { focusCard += '<div class="db-sub">VIP · 최우선</div>'; fp.vip.forEach(function(c){
       focusCard += '<div class="db-row" onclick="openDetail(\'' + c.id + '\')">'
         + '<span class="db-grade" style="background:' + gradeColor(c.grade||'') + '">' + (c.grade||'-') + '</span>'
         + '<span class="db-rowname">' + escapeHtmlT(c.name||'') + '</span>'
@@ -3460,7 +3490,7 @@ function renderDashboard(s) {
   // ⏰ 만기 임박 (색상 배지)
   function expRow(label,val,key,color,bg){ return '<div class="db-exp" style="border-left:3px solid ' + color + '" onclick="dbGoStatus(\'' + key + '\')"><span class="db-exp-dot" style="background:' + color + '"></span><span class="db-exp-l">' + label + '</span><span class="db-exp-v" style="color:' + color + ';background:' + bg + '">' + val + '명</span></div>'; }
   var expCard = '<div class="db-card"><div class="db-card-h"><span>⏰ 만기 임박 (매도·임대)</span></div>'
-    + (s.overdue ? expRow('만기 지남', s.overdue, 'overdue_exp', '#c0392b', '#f7ddd9') : '')
+    + expRow('만기 지남', s.overdue, 'overdue_exp', '#c0392b', '#f7ddd9')
     + expRow('30일 내', s.urgent, 'urgent_exp', '#e74c3c', '#fdecea')
     + expRow('3개월 내', s.soon, 'soon_exp', '#e67e22', '#fdf0e3')
     + expRow('6개월 내', s.watch, 'watch_exp', '#d4a017', '#fbf4da')
@@ -4447,19 +4477,21 @@ function render() {
       const topicOpts2 = TOPICS.map(t=>`<option value="${t}"${state.sendTopic===t?' selected':''}>${t}</option>`).join('');
       tabBody = `
         <div class="log-add">
-          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">📤 정보 발송 기록 추가</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px">${state.editingSendIdx!=null ? '✏️ 정보 발송 기록 수정' : '📤 정보 발송 기록 추가'}</div>
           <div class="log-add-row">
             <input class="form-input" type="date" value="${state.sendDate||today()}" onchange="state.sendDate=this.value" style="flex:0 0 130px">
             <select class="form-input" onchange="state.sendTopic=this.value" style="flex:0 0 120px">${topicOpts2}</select>
           </div>
           <div class="log-add-row">
             <input class="form-input" placeholder="발송 내용..." value="${state.sendContent}" oninput="state.sendContent=this.value" onkeydown="if(event.key==='Enter'){addSend();event.preventDefault()}" style="flex:1">
-            <button class="btn btn-primary btn-sm" onclick="addSend()">저장</button>
+            ${state.editingSendIdx!=null
+              ? `<button class="btn btn-sm" onclick="cancelEditSend()" style="flex:0 0 56px">취소</button><button class="btn btn-primary btn-sm" onclick="addSend()">✏️ 수정</button>`
+              : `<button class="btn btn-primary btn-sm" onclick="addSend()">저장</button>`}
           </div>
         </div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:8px">총 ${sends.length}회 정보 발송</div>
         ${sends.length === 0 ? '<div style="text-align:center;color:var(--text3);padding:24px;font-size:13px">정보 발송 기록이 없습니다</div>' : ''}
-        ${sends.map(s=>`<div class="send-item"><div class="send-date">${fmtDateFull(s.date)}</div><div class="send-content">${s.content}</div><span class="send-topic">${s.topic||''}</span></div>`).join('')}`;
+        ${sends.map((s,idx)=>`<div class="send-item"><div class="send-date">${fmtDateFull(s.date)}</div><div class="send-content">${s.content}</div><span class="send-topic">${s.topic||''}</span><div class="send-actions"><button class="btn btn-sm send-act-btn" onclick="startEditSend('${sel.id}',${idx})">✏️ 수정</button><button class="btn btn-sm btn-danger send-act-btn" onclick="deleteSend('${sel.id}',${idx})">삭제</button></div></div>`).join('')}`;
     }
 
     html += `<div class="modal-overlay">

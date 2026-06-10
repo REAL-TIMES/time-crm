@@ -496,6 +496,22 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .sched-alert-banner:hover{opacity:.85;}
 .sched-alert-banner.missed{background:#fdecea;border-color:#f4c7c1;color:#b03a2e;}
 .focus-banner{margin:0 16px 8px;padding:11px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px;cursor:pointer;background:#13294B;color:#C9A24B;border:1px solid #0c1c38;letter-spacing:.2px;}
+.ai-panel{background:#f7f6fb;border:1px solid #e2dcf0;border-radius:12px;padding:12px 14px;margin-bottom:14px;}
+.ai-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.ai-title{font-size:13px;font-weight:800;color:#5b3fa0;}
+.ai-btn{padding:7px 13px;border:1px solid #6b4fc0;background:#6b4fc0;color:#fff;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.ai-btn:hover{opacity:.92;}
+.ai-btn:disabled{opacity:.5;cursor:default;}
+.ai-status{font-size:12px;color:#7a6aa8;min-height:0;margin-bottom:4px;}
+.ai-status:empty{display:none;}
+.ai-meta{font-size:11px;color:#9a90b5;margin-bottom:6px;}
+.ai-stale{color:#c0392b;font-weight:700;}
+.ai-summary{font-size:13.5px;line-height:1.65;color:#2c2740;white-space:pre-wrap;background:#fff;border-radius:9px;padding:10px 12px;}
+.ai-acts-h{font-size:11.5px;font-weight:800;color:#5b3fa0;margin:10px 0 4px;}
+.ai-acts{margin:0;padding-left:18px;}
+.ai-acts li{font-size:13px;line-height:1.55;color:#33405a;margin-bottom:4px;}
+.ai-note{font-size:11px;color:#9a90b5;margin-top:8px;font-style:italic;}
+.ai-empty{font-size:12.5px;color:#9a90b5;line-height:1.6;}
 .dashboard-wrap{max-width:1180px;margin:0 auto;padding:16px 18px 60px;height:calc(100vh - 44px);height:calc(100dvh - 44px);overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .db-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
 .db-title{font-size:18px;font-weight:800;color:#13294B;}
@@ -1535,7 +1551,7 @@ function effectiveDifficulty(c) {
 // ── 입주/거래 희망 시기 (시급성용, 매수·임차) ──
 const TIMING_OPTS = ['즉시','3개월','6개월','미정'];
 
-const APP_VERSION = 'v2.16.8';
+const APP_VERSION = 'v2.16.9';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -3252,6 +3268,89 @@ function filterBarHtml(){
     + '<button class="fb-reset" onclick="dbResetFilters();render()">필터 초기화</button></div>';
 }
 
+// ===== AI 비서: 기록 요약 + 다음 액션 제안 (advise-customer Edge Function) =====
+function aiScrub(s){ return String(s||'').replace(/01[016789]-?\d{3,4}-?\d{4}/g, '[전화]'); }
+function buildAdviseText(c){
+  var L = [];
+  L.push('고객 유형: ' + (TYPE_LABEL[c.type] || c.type || '-') + ' / 등급: ' + (c.grade || '-'));
+  var prop = [];
+  if (c.propMain) prop.push(propMainLabel(c.propMain));
+  if (c.propSub) prop.push(c.propSub);
+  if (prop.length) L.push('매물: ' + prop.join(' '));
+  if (c.interest) L.push('관심/조건: ' + aiScrub(c.interest));
+  if (c.moveTiming) L.push('희망 시기: ' + c.moveTiming);
+  if (c.leaseExpiry) L.push('임대차 만기일: ' + c.leaseExpiry);
+  if (c.notes) L.push('메모: ' + aiScrub(c.notes));
+  var byDate = function(a,b){ return (a.date||'').localeCompare(b.date||''); };
+  var ct = (c.contacts||[]).slice().sort(byDate);
+  if (ct.length){ L.push(''); L.push('[상담 기록]'); ct.forEach(function(x){ L.push('- ' + (x.date||'') + (x.topic?(' ('+x.topic+')'):'') + ': ' + aiScrub(x.text)); }); }
+  var vs = (c.visits||[]).slice().sort(byDate);
+  if (vs.length){ L.push(''); L.push('[투어 기록]'); vs.forEach(function(v){
+    var loc = [v.building, v.dong, v.ho, (v.floor?v.floor+'층':'')].filter(Boolean).join(' ');
+    L.push('- ' + (v.date||'') + (loc?(' '+loc):'') + (v.stars?(' 별점'+v.stars):'') + (v.feedback?(' / 반응: '+aiScrub(v.feedback)):'') + (v.request?(' / 요청: '+aiScrub(v.request)):''));
+  }); }
+  var sd = (c.sends||[]).slice().sort(byDate);
+  if (sd.length){ L.push(''); L.push('[정보 발송]'); sd.forEach(function(s){ L.push('- ' + (s.date||'') + (s.topic?(' ('+s.topic+')'):'') + ': ' + aiScrub(s.content)); }); }
+  return L.join('\n');
+}
+function aiHasRecords(c){
+  return (c.contacts && c.contacts.length) || (c.visits && c.visits.length) || (c.sends && c.sends.length);
+}
+function aiPanelHtml(c){
+  var has = aiHasRecords(c);
+  var saved = c.aiSummary;
+  var stale = saved && (c.aiSummaryTouch !== (lastTouchDate(c) || ''));
+  var head = '<div class="ai-panel"><div class="ai-head"><span class="ai-title">🤖 AI 정리·조언</span>'
+    + '<button class="ai-btn" id="ai-run-btn" onclick="aiAdvise(\'' + c.id + '\')">' + (saved ? '🔄 새로 분석' : '정리·조언 받기') + '</button></div>';
+  var body = '';
+  if (!has) {
+    body = '<div class="ai-empty">상담·투어·발송 기록이 있으면 AI가 요약하고 다음 행동을 제안해요.</div>';
+  } else if (saved) {
+    var acts = Array.isArray(c.aiActions) ? c.aiActions : [];
+    body = '<div class="ai-meta">' + (c.aiSummaryAt ? fmtDateFull(c.aiSummaryAt) + ' 생성' : '') + (stale ? ' · <span class="ai-stale">기록 변경됨 — 새로 분석 권장</span>' : '') + '</div>'
+      + '<div class="ai-summary">' + escapeHtmlT(c.aiSummary) + '</div>'
+      + (acts.length ? '<div class="ai-acts-h">다음 행동 (참고 제안)</div><ul class="ai-acts">' + acts.map(function(a){ return '<li>' + escapeHtmlT(a) + '</li>'; }).join('') + '</ul>' : '')
+      + '<div class="ai-note">참고용 제안이에요. 최종 판단은 대표님 몫입니다.</div>';
+  } else {
+    body = '<div class="ai-empty">버튼을 누르면 그동안의 상담·투어·발송 기록을 한 번에 요약하고, 다음에 무엇을 하면 좋을지 제안해요.</div>';
+  }
+  return head + '<div class="ai-status" id="ai-status"></div>' + body + '</div>';
+}
+async function aiAdvise(cid){
+  var c = (state.customers||[]).find(function(x){ return x.id===cid; });
+  if (!c) return;
+  if (!aiHasRecords(c)) { var s0=document.getElementById('ai-status'); if(s0) s0.textContent='기록이 없어 분석할 내용이 없어요.'; return; }
+  var st = document.getElementById('ai-status');
+  var btn = document.getElementById('ai-run-btn');
+  if (st) st.textContent = '🤖 기록을 읽고 정리하는 중... (10~20초)';
+  if (btn) btn.disabled = true;
+  try {
+    var recordText = buildAdviseText(c);
+    var cfg = getSbConfig();
+    var token = getAccessToken() || cfg.key;
+    var res = await fetch(cfg.url + '/functions/v1/advise-customer', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'apikey': cfg.key, 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ recordText: recordText })
+    });
+    if (res.status === 404) { if (st) st.textContent = 'ℹ️ AI 비서가 아직 서버에 배포되지 않았어요 (advise-customer 함수 필요).'; return; }
+    if (res.status === 429) { if (st) st.textContent = '⏳ 잠시 요청이 많아요(무료 한도). 1~2분 뒤 다시 시도해주세요.'; return; }
+    if (!res.ok) { if (st) st.textContent = '⚠️ 분석 실패 (' + res.status + '). 잠시 후 다시 시도해주세요.'; return; }
+    var j = await res.json();
+    if (j.error) { if (st) st.textContent = '⚠️ ' + j.error; return; }
+    c.aiSummary = j.summary || '';
+    c.aiActions = Array.isArray(j.actions) ? j.actions : [];
+    c.aiSummaryAt = today();
+    c.aiSummaryTouch = lastTouchDate(c) || '';
+    render();
+    persistAll('🤖 AI 정리·조언 완료');
+  } catch(e) {
+    if (st) st.textContent = '⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function goHome() {
   ['sched-modal','focus-modal','followup-modal','cleanup-modal'].forEach(function(id){ var m=document.getElementById(id); if(m) m.classList.remove('show'); });
   state.view = (window.innerWidth > 768) ? 'dashboard' : 'list';
@@ -3816,6 +3915,7 @@ function render() {
       const cStatus2 = sel.status || 'received';
       tabBody = `
         ${alertHtml}
+        ${aiPanelHtml(sel)}
         <div class="info-grid">
           <div class="info-card"><div class="info-lbl">유형</div><div class="info-val"><span class="tag ${TYPE_CLASS[sel.type]||''}">${TYPE_LABEL[sel.type]||sel.type}</span></div></div>
           <div class="info-card"><div class="info-lbl">등급</div><div class="info-val"><span class="grade-badge grade-${sel.grade}" style="display:inline-flex;width:28px;height:28px;font-size:12px">${sel.grade}</span></div></div>

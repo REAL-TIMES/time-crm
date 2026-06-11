@@ -1646,7 +1646,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.10';
+const APP_VERSION = 'v2.17.11';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2300,7 +2300,8 @@ function filtered() {
     // 등급 필터 ← 이게 빠져있었음
     if (state.filterGrade !== 'all' && c.grade !== state.filterGrade) return false;
     // 유형 필터
-    if (state.filterType !== 'all' && c.type !== state.filterType) return false;
+    if (state.filterType === 'listing') { if (c.type!=='seller' && c.type!=='landlord' && c.type!=='potential') return false; }
+    else if (state.filterType !== 'all' && c.type !== state.filterType) return false;
     // 매물 유형 필터
     if (state.filterPropMain !== 'all' && (c.propMain||'') !== state.filterPropMain) return false;
     if (state.filterPropSub  !== 'all' && (c.propSub||'')  !== state.filterPropSub)  return false;
@@ -2384,6 +2385,12 @@ function quickSetStatus(id, st) {
   render();
   restoreListScroll();
   persistAll('진행 상태 변경: ' + (STATUS_LABEL[st]||st));
+}
+function setListFilter(fn) {
+  var el = document.querySelector('.list-wrap'); state._listScroll = el ? el.scrollTop : (state._listScroll||0);
+  if (typeof fn === 'function') fn();
+  render();
+  restoreListScroll();
 }
 function restoreListScroll() {
   var top = state._listScroll || 0;
@@ -2684,13 +2691,13 @@ function cleanupItemHtml(it) {
   return '<div class="fu-item">'
     + '<div class="fu-row1">'
     + '<span class="fu-grade" style="background:' + gradeColor(g) + '">' + (g || '-') + '</span>'
-    + '<span class="fu-name" onclick="closeFocus();openDetail(\'' + c.id + '\')">' + escapeHtmlT(c.name || '(이름없음)') + '</span>'
+    + '<span class="fu-name" onclick="closeFocus();closeCleanup();openDetail(\'' + c.id + '\')">' + escapeHtmlT(c.name || '(이름없음)') + '</span>'
     + '<span class="fu-days">' + dayTxt + '</span></div>'
     + '<div class="fu-meta">' + it.tier.label + ' · ' + tlabel + (c.interest ? ' · ' + escapeHtmlT(c.interest) : '') + '</div>'
     + '<div class="fu-btns">'
     + '<button class="b-call" onclick="fuCall(\'' + c.id + '\')">📞 전화</button>'
     + actBtn
-    + '<button onclick="closeFocus();openDetail(\'' + c.id + '\')">📋 상세</button>'
+    + '<button onclick="closeFocus();closeCleanup();openDetail(\'' + c.id + '\')">📋 상세</button>'
     + '</div></div>';
 }
 async function focusSetStatus(id, st) {
@@ -3593,7 +3600,7 @@ function filterChip(label, clearJS){
 function filterBarHtml(){
   var chips = [];
   if (state.filterGrade !== 'all')    chips.push(filterChip(state.filterGrade + '등급', "state.filterGrade='all'"));
-  if (state.filterType !== 'all')     chips.push(filterChip(TYPE_LABEL[state.filterType] || state.filterType, "state.filterType='all'"));
+  if (state.filterType !== 'all')     chips.push(filterChip(state.filterType==='listing' ? '매물의뢰' : (TYPE_LABEL[state.filterType] || state.filterType), "state.filterType='all'"));
   if (state.filterStatus !== 'all')   chips.push(filterChip(statusFilterLabel(state.filterStatus), "state.filterStatus='all'"));
   if (state.filterPropMain !== 'all') chips.push(filterChip(propMainLabel(state.filterPropMain), "state.filterPropMain='all'"));
   if (state.filterPropSub !== 'all')  chips.push(filterChip(state.filterPropSub, "state.filterPropSub='all'"));
@@ -3888,7 +3895,7 @@ function render() {
   // 등급별
   html += `<div class="sb-section"><div class="sb-section-title">등급별 현황</div><div class="sb-stats">`;
   [{k:'all',lbl:'전체',color:'#fff'},{k:'S',lbl:'S',color:'#ff8a80'},{k:'A',lbl:'A',color:'#ffcc80'},{k:'B',lbl:'B',color:'#80d8ff'},{k:'C',lbl:'C',color:'#b9f6ca'}].forEach(g=>{
-    html += `<div class="sb-stat${state.filterGrade===g.k?' active':''}" onclick="state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';render()"><span class="l">${g.lbl}</span><span class="n" style="color:${g.color}">${_gc(g.k)}</span></div>`;
+    html += `<div class="sb-stat${state.filterGrade===g.k?' active':''}" onclick="setListFilter(function(){state.filterGrade=state.filterGrade==='${g.k}'?'all':'${g.k}';})"><span class="l">${g.lbl}</span><span class="n" style="color:${g.color}">${_gc(g.k)}</span></div>`;
   });
   html += `</div></div>`;
 
@@ -3900,7 +3907,7 @@ function render() {
    {k:'watch_exp',lbl:'🟡6개월',num:s.watch,color:'#ffd43b'},
    {k:'contact_warn',lbl:'📵연락요망',num:s.contactWarn,color:'#ff6b6b'},
   ].forEach(e=>{
-    html += `<div class="sb-stat${state.filterStatus===e.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${e.k}'?'all':'${e.k}';render()"><span class="l">${e.lbl}</span><span class="n" style="color:${e.color}">${e.num}</span></div>`;
+    html += `<div class="sb-stat${state.filterStatus===e.k?' active':''}" onclick="setListFilter(function(){state.filterGrade='all';state.filterStatus=state.filterStatus==='${e.k}'?'all':'${e.k}';})"><span class="l">${e.lbl}</span><span class="n" style="color:${e.color}">${e.num}</span></div>`;
   });
   html += `</div></div>`;
 
@@ -3908,7 +3915,7 @@ function render() {
   html += `<div class="sb-section"><div class="sb-section-title">진행 상태</div><div class="sb-stats">`;
   [{k:'received',lbl:'접수',color:'#80d8ff'},{k:'started',lbl:'착수',color:'#d8b4fe'},{k:'contracting',lbl:'계약',color:'#ffa94d'},{k:'managing',lbl:'관리',color:'#86efac'},{k:'hold',lbl:'보류',color:'rgba(255,255,255,0.55)'},{k:'closed',lbl:'종료',color:'#69db7c'}].forEach(st=>{
     const num=_nd.filter(x=>(x.status||'received')===st.k).length;
-    html += `<div class="sb-stat${state.filterStatus===st.k?' active':''}" onclick="state.filterGrade='all';state.filterStatus=state.filterStatus==='${st.k}'?'all':'${st.k}';render()"><span class="l">${st.lbl}</span><span class="n" style="color:${st.color}">${num}</span></div>`;
+    html += `<div class="sb-stat${state.filterStatus===st.k?' active':''}" onclick="setListFilter(function(){state.filterGrade='all';state.filterStatus=state.filterStatus==='${st.k}'?'all':'${st.k}';})"><span class="l">${st.lbl}</span><span class="n" style="color:${st.color}">${num}</span></div>`;
   });
   html += `</div></div>`;
 
@@ -3916,14 +3923,16 @@ function render() {
   const _tc = (k)=> k==='all' ? _nd.length : _nd.filter(x=>x.type===k).length;
   html += `<div class="sb-section"><div class="sb-section-title">고객 유형</div><div class="sb-stats sb-stats-wide">`;
   [{k:'all',lbl:'전체'},{k:'buyer',lbl:'매수'},{k:'seller',lbl:'매도'},{k:'tenant',lbl:'임차'},{k:'landlord',lbl:'임대'},{k:'potential',lbl:'잠재'},{k:'partner_agency',lbl:'협력부동산'},{k:'partner_dev',lbl:'분양대행'},{k:'partner_build',lbl:'시행·시공'},{k:'partner_finance',lbl:'금융·법무'}].forEach(t=>{
-    html += `<div class="sb-stat${state.filterType===t.k?' active':''}" onclick="state.filterType=state.filterType==='${t.k}'?'all':'${t.k}';render()"><span class="l">${t.lbl}</span><span class="n">${_tc(t.k)}</span></div>`;
+    html += `<div class="sb-stat${state.filterType===t.k?' active':''}" onclick="setListFilter(function(){state.filterType=state.filterType==='${t.k}'?'all':'${t.k}';})"><span class="l">${t.lbl}</span><span class="n">${_tc(t.k)}</span></div>`;
   });
+  var _listingN = _nd.filter(function(x){ return x.type==='seller'||x.type==='landlord'||x.type==='potential'; }).length;
+  html += `<div class="sb-stat${state.filterType==='listing'?' active':''}" style="grid-column:1/-1;background:rgba(201,169,110,0.12)" onclick="setListFilter(function(){state.filterType=state.filterType==='listing'?'all':'listing';})"><span class="l">📋 매물의뢰 (매도·임대·잠재)</span><span class="n">${_listingN}</span></div>`;
   html += `</div></div>`;
 
   // 매물 유형 칩
   html += `<div class="sb-section"><div class="sb-section-title">매물 유형</div><div class="sb-chips">
-    <div class="sb-chip${state.filterPropMain==='all'?' active':''}" onclick="state.filterPropMain='all';state.filterPropSub='all';render()">전체</div>`;
-  PROP_MAIN.forEach(p => { html += `<div class="sb-chip${state.filterPropMain===p.key?' active':''}" onclick="state.filterPropMain=state.filterPropMain==='${p.key}'?'all':'${p.key}';state.filterPropSub='all';render()">${p.icon} ${p.label}</div>`; });
+    <div class="sb-chip${state.filterPropMain==='all'?' active':''}" onclick="setListFilter(function(){state.filterPropMain='all';state.filterPropSub='all';})">전체</div>`;
+  PROP_MAIN.forEach(p => { html += `<div class="sb-chip${state.filterPropMain===p.key?' active':''}" onclick="setListFilter(function(){state.filterPropMain=state.filterPropMain==='${p.key}'?'all':'${p.key}';state.filterPropSub='all';})">${p.icon} ${p.label}</div>`; });
   html += `</div>`;
   if (state.filterPropMain !== 'all' && PROP_SUB[state.filterPropMain]) {
     html += `<div class="sb-chips" style="margin-top:6px;">

@@ -1632,6 +1632,21 @@ function timingWeight(c) {                  // 시기 가중치 0~1 (D-day 기�
   return legacy === undefined ? 0.1 : legacy;
 }
 function timingPartLabel(day) { return day <= 8 ? '초' : day <= 18 ? '중순' : '말'; }
+// 매물 의뢰 시작일 (없으면 등록일/첫 상담일로 폴백)
+function listingStartDate(c) {
+  if (c.listDate) return c.listDate;
+  var earliest = '';
+  var ct = c.contacts || [];
+  for (var i=0;i<ct.length;i++){ if (ct[i].date && (!earliest || ct[i].date < earliest)) earliest = ct[i].date; }
+  if (earliest) return earliest;
+  if (c.id && /^\d+$/.test(c.id)) { var d = new Date(parseInt(c.id,10)); if (!isNaN(d.getTime())) return d.toISOString().slice(0,10); }
+  return '';
+}
+function listingDays(c) {            // 의뢰 후 경과일 (없으면 null)
+  var sd = listingStartDate(c); if (!sd) return null;
+  var diff = Math.floor((new Date(today()) - new Date(sd)) / 86400000);
+  return diff < 0 ? 0 : diff;
+}
 function timingLabel(c) {                   // 화면 표시용
   if (c.moveImmediate) return '⚡ 즉시';
   if (c.targetDate) {
@@ -1646,7 +1661,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.11';
+const APP_VERSION = 'v2.17.12';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -2362,7 +2377,7 @@ function showToast(msg) {
 
 function openAdd() {
   state._listScroll = 0;
-  state.editData = {id:'',name:'',nickname:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:'',moveImmediate:false,targetDate:''};
+  state.editData = {id:'',name:'',nickname:'',phone:'',gender:'',type:'buyer',grade:'B',status:'received',propMain:'apt',propSub:'',interest:'',leaseExpiry:'',lastContact:today(),nextFollowUp:'',stage:0,notes:'',contacts:[],sends:[],schedules:[],difficulty:'',moveTiming:'',moveImmediate:false,targetDate:'',listDate:'',askPrice:'',prevAskPrice:'',prevAskAt:''};
   state.view = 'form';
   render();
 }
@@ -2455,6 +2470,13 @@ function timingPickerHtml(d) {
 function renderTimingBlock() {
   var box = document.getElementById('timing-block');
   if (box && state.editData) box.innerHTML = timingPickerHtml(state.editData);
+}
+function setAskPrice(v){
+  var d=state.editData; if(!d) return;
+  var nv=(v||'').trim();
+  var cur=(d.askPrice||'').trim();
+  if(nv && cur && nv!==cur){ d.prevAskPrice=cur; d.prevAskAt=today(); }
+  d.askPrice=v;
 }
 function setTimingImmediate(){ var d=state.editData; if(!d)return; d.moveImmediate=true; d.targetDate=''; d.moveTiming=''; renderTimingBlock(); }
 function setTimingUndecided(){ var d=state.editData; if(!d)return; d.moveImmediate=false; d.targetDate=''; d.moveTiming=''; renderTimingBlock(); }
@@ -3821,6 +3843,7 @@ function renderDashboard(s) {
 
 function render() {
   const app = document.getElementById('app');
+  var _sbEl0 = document.querySelector('.sidebar'); var _sbTop0 = _sbEl0 ? _sbEl0.scrollTop : 0;
   const s = stats();
   const list = filtered();
   const sel = state.customers.find(x=>x.id===state.selectedId);
@@ -3856,6 +3879,7 @@ function render() {
   if (state.view === 'dashboard') {
     html += renderDashboard(s);
     app.innerHTML = html;
+    var _sb1 = document.querySelector('.sidebar'); if (_sb1) _sb1.scrollTop = _sbTop0;
     return;
   }
 
@@ -4013,12 +4037,22 @@ function render() {
       const urg = cardUrgencyClass(c);
       const cStatus = c.status || 'received';
       const elapsed = contactElapsedInfo(c);
-      const elapsedHtml = elapsed ? `
+      const isListing = (c.type==='seller'||c.type==='landlord'||c.type==='potential');
+      let elapsedHtml = '';
+      if (isListing) {
+        const ld = listingDays(c);
+        if (ld !== null) {
+          const lcls = ld > 90 ? 'elapsed-danger' : (ld > 30 ? 'elapsed-warn' : 'elapsed-ok');
+          elapsedHtml = `<div class="contact-elapsed ${lcls}"><span>📋 의뢰</span><span style="font-weight:700;">${ld}일째</span></div>`;
+        }
+      } else {
+        elapsedHtml = elapsed ? `
         <div class="contact-elapsed ${elapsed.cls}">
           <span>📞 마지막 상담</span>
           <span style="font-weight:700;">${elapsed.label}</span>
           <div class="elapsed-bar"><div class="elapsed-bar-fill" style="width:${elapsed.pct}%"></div></div>
         </div>` : '';
+      }
       const dLeft = daysTo(c.leaseExpiry);
       let expiryBarHtml = '';
       if(dLeft !== null && dLeft <= 180 && dLeft >= 0) {
@@ -4180,6 +4214,17 @@ function render() {
               <label class="form-label">입주·거래 희망 시기 (시급성)</label>
               <div id="timing-block">${timingPickerHtml(d)}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:3px">목표 시기를 정하면 날짜가 다가올수록 '오늘의 집중' 점수가 자동으로 올라가요.</div>
+            </div>` : ''}
+            ${(d.type==='seller'||d.type==='landlord'||d.type==='potential') ? `
+            <div class="form-group full">
+              <label class="form-label">매물 의뢰일</label>
+              <input class="form-input" type="date" value="${d.listDate||''}" onchange="state.editData.listDate=this.value">
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">비워두면 등록일·첫 상담일로 자동 계산돼요. "의뢰 N일째"로 표시됩니다.</div>
+            </div>
+            <div class="form-group full">
+              <label class="form-label">호가</label>
+              <input class="form-input" value="${d.askPrice||''}" oninput="setAskPrice(this.value)" placeholder="예: 25억, 7억5천">
+              ${d.prevAskPrice?`<div style="font-size:11px;color:var(--text3);margin-top:3px">직전 호가: ${d.prevAskPrice}${d.prevAskAt?' ('+d.prevAskAt+')':''}</div>`:''}
             </div>` : ''}
             <div class="form-group full">
               <label class="form-label">관심 매물 (단지명·평형 등)</label>
@@ -4814,6 +4859,7 @@ function render() {
   html += `</div></div>`; // close main-content + body-wrap
 
   app.innerHTML = html;
+  var _sb2 = document.querySelector('.sidebar'); if (_sb2) _sb2.scrollTop = _sbTop0;
 }
 // ── 권위 있는 최종 정의: 로그인 = 사용자 토큰 보유 여부 ──
 // (위쪽의 옛 해시기반 isLoggedIn 정의들을 이 정의가 덮어씀)

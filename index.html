@@ -515,6 +515,19 @@ textarea.form-input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .ai-acts li{font-size:13px;line-height:1.55;color:#33405a;margin-bottom:4px;}
 .ai-note{font-size:11px;color:#9a90b5;margin-top:8px;font-style:italic;}
 .ai-empty{font-size:12.5px;color:#9a90b5;line-height:1.6;}
+.ai-intro{font-size:12px;color:#6a5f88;line-height:1.55;margin-bottom:8px;}
+.aichat-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.aichat-chips button{padding:6px 11px;border:1px solid #d8cff0;background:#fff;color:#5b3fa0;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.aichat-chips button:hover{background:#f3eefe;}
+.aichat-log{display:flex;flex-direction:column;gap:7px;max-height:300px;overflow-y:auto;padding:4px 2px;margin-bottom:8px;}
+.aichat-msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.6;word-break:break-word;}
+.aichat-msg.me{align-self:flex-end;background:#13294B;color:#fff;border-bottom-right-radius:4px;}
+.aichat-msg.ai{align-self:flex-start;background:#fff;color:#2c2740;border:1px solid #e6e0f2;border-bottom-left-radius:4px;}
+.aichat-input-row{display:flex;gap:6px;}
+.aichat-input{flex:1;min-width:0;padding:10px 12px;border:1px solid #d5dae2;border-radius:10px;font-size:13px;font-family:inherit;color:#222a35;background:#fff;}
+.aichat-input:focus{outline:none;border-color:#6b4fc0;}
+.aichat-send{flex-shrink:0;padding:10px 16px;border:none;background:#6b4fc0;color:#fff;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.aichat-send:disabled{opacity:.5;cursor:default;}
 .tm-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
 .tm-q{padding:7px 12px;border:1px solid #d5dae2;background:#fff;color:#33405a;border-radius:18px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
 .tm-q.on{background:#13294B;color:#fff;border-color:#13294B;}
@@ -1661,7 +1674,7 @@ function timingLabel(c) {                   // 화면 표시용
   return '';
 }
 
-const APP_VERSION = 'v2.17.12';
+const APP_VERSION = 'v2.18.0';
 
 // ── 매물 유형 (대분류 → 소분류) ──
 const PROP_MAIN = [
@@ -1719,6 +1732,7 @@ let state = {
   visitDate: '', visitBuilding: '', visitAddress: '',
   visitDong: '', visitHo: '', visitFloor: '',
   visitStars: 0, visitFeedback: '', visitRequest: '',
+  aiChat: {}, aiChatDraft: {},
   contractDraft: null,
 };
 
@@ -2352,6 +2366,7 @@ function filtered() {
     const GO = {S:0,A:1,B:2,C:3};
     switch (state.sortBy) {
       case 'grade':        return ((GO[a.grade]??9) - (GO[b.grade]??9)) * (state.sortDir==='asc' ? -1 : 1);
+      case 'score':        return (focusScore(a) - focusScore(b)) * dir;
       case 'lastContact':  return ((a.lastContact?new Date(a.lastContact):new Date(0)) - (b.lastContact?new Date(b.lastContact):new Date(0))) * dir;
       case 'registered':   return ((parseInt(a.id)||0) - (parseInt(b.id)||0)) * dir;
       case 'name':         return a.name.localeCompare(b.name, 'ko') * dir;
@@ -3660,58 +3675,88 @@ function buildAdviseText(c){
 function aiHasRecords(c){
   return (c.contacts && c.contacts.length) || (c.visits && c.visits.length) || (c.sends && c.sends.length);
 }
-function aiPanelHtml(c){
+function aiChatPanelHtml(c){
   var has = aiHasRecords(c);
-  var saved = c.aiSummary;
-  var stale = saved && (c.aiSummaryTouch !== (lastTouchDate(c) || ''));
-  var head = '<div class="ai-panel"><div class="ai-head"><span class="ai-title">🤖 AI 정리·조언</span>'
-    + '<button class="ai-btn" id="ai-run-btn" onclick="aiAdvise(\'' + c.id + '\')">' + (saved ? '🔄 새로 분석' : '정리·조언 받기') + '</button></div>';
-  var body = '';
-  if (!has) {
-    body = '<div class="ai-empty">상담·투어·발송 기록이 있으면 AI가 요약하고 다음 행동을 제안해요.</div>';
-  } else if (saved) {
-    var acts = Array.isArray(c.aiActions) ? c.aiActions : [];
-    body = '<div class="ai-meta">' + (c.aiSummaryAt ? fmtDateFull(c.aiSummaryAt) + ' 생성' : '') + (stale ? ' · <span class="ai-stale">기록 변경됨 — 새로 분석 권장</span>' : '') + '</div>'
-      + '<div class="ai-summary">' + escapeHtmlT(c.aiSummary) + '</div>'
-      + (acts.length ? '<div class="ai-acts-h">다음 행동 (참고 제안)</div><ul class="ai-acts">' + acts.map(function(a){ return '<li>' + escapeHtmlT(a) + '</li>'; }).join('') + '</ul>' : '')
-      + '<div class="ai-note">참고용 제안이에요. 최종 판단은 대표님 몫입니다.</div>';
+  var msgs = (state.aiChat && state.aiChat[c.id]) ? state.aiChat[c.id] : [];
+  var draft = (state.aiChatDraft && state.aiChatDraft[c.id]) ? state.aiChatDraft[c.id] : '';
+  var head = '<div class="ai-panel"><div class="ai-head"><span class="ai-title">🤖 AI 상담</span>'
+    + (msgs.length ? '<button class="ai-btn" onclick="aiChatClear(\'' + c.id + '\')">🗑 대화 비우기</button>' : '') + '</div>';
+  var intro = '<div class="ai-intro">이 고객의 <b>기본정보·상담·투어·발송 기록</b>을 이미 보고 있어요. 무엇이든 물어보세요. <span class="ai-note">(전화번호 등은 가린 채 분석합니다)</span></div>';
+  var chips = '<div class="aichat-chips">'
+    + '<button onclick="aiChatQuick(\'' + c.id + '\',\'이 고객 상황을 요약하고, 지금 무엇을 하면 좋을지 알려줘\')">📋 요약·다음 행동</button>'
+    + '<button onclick="aiChatQuick(\'' + c.id + '\',\'이 고객에게 어떤 단지·매물을 권하면 좋을지 관점을 알려줘\')">🏢 매물 추천 관점</button>'
+    + '<button onclick="aiChatQuick(\'' + c.id + '\',\'지금 전화하면 어떤 말로 시작하면 좋을지 알려줘\')">📞 통화 오프닝</button>'
+    + '</div>';
+  var body = '<div class="aichat-log" id="aichat-log">';
+  if (!msgs.length) {
+    body += '<div class="ai-empty">' + (has ? '아래에 질문을 입력하거나 위 버튼을 눌러 시작하세요.' : '아직 상담·투어·발송 기록이 없어요. 기본정보만으로도 질문은 가능해요.') + '</div>';
   } else {
-    body = '<div class="ai-empty">버튼을 누르면 그동안의 상담·투어·발송 기록을 한 번에 요약하고, 다음에 무엇을 하면 좋을지 제안해요.</div>';
+    for (var i=0;i<msgs.length;i++){
+      var m = msgs[i];
+      body += '<div class="aichat-msg ' + (m.role==='user'?'me':'ai') + '">' + escapeHtmlT(m.text).replace(/\n/g,'<br>') + '</div>';
+    }
   }
-  return head + '<div class="ai-status" id="ai-status"></div>' + body + '</div>';
+  body += '</div>';
+  var status = '<div class="ai-status" id="ai-status"></div>';
+  var inputRow = '<div class="aichat-input-row">'
+    + '<input class="aichat-input" id="aichat-input" placeholder="질문을 입력하세요..." value="' + escapeAttrT(draft) + '"'
+    + ' oninput="if(!state.aiChatDraft)state.aiChatDraft={};state.aiChatDraft[\'' + c.id + '\']=this.value"'
+    + ' onkeydown="if(event.key===\'Enter\'){aiChatSend(\'' + c.id + '\');event.preventDefault()}">'
+    + '<button class="aichat-send" id="aichat-send" onclick="aiChatSend(\'' + c.id + '\')">보내기</button>'
+    + '</div>';
+  return head + intro + chips + body + status + inputRow + '</div>';
 }
-async function aiAdvise(cid){
+function aiChatQuick(cid, q){
+  if(!state.aiChatDraft) state.aiChatDraft = {};
+  state.aiChatDraft[cid] = q;
+  aiChatSend(cid);
+}
+function aiChatClear(cid){
+  if(!confirm('이 고객의 AI 대화 내용을 지울까요?')) return;
+  if(state.aiChat) state.aiChat[cid] = [];
+  render();
+}
+async function aiChatSend(cid){
   var c = (state.customers||[]).find(function(x){ return x.id===cid; });
-  if (!c) return;
-  if (!aiHasRecords(c)) { var s0=document.getElementById('ai-status'); if(s0) s0.textContent='기록이 없어 분석할 내용이 없어요.'; return; }
+  if(!c) return;
+  var draft = (state.aiChatDraft && state.aiChatDraft[cid]) ? state.aiChatDraft[cid].trim() : '';
+  var inputEl = document.getElementById('aichat-input');
+  if(!draft && inputEl) draft = (inputEl.value||'').trim();
+  if(!draft){ var s0=document.getElementById('ai-status'); if(s0) s0.textContent='질문을 입력해주세요.'; return; }
+  if(!state.aiChat) state.aiChat = {};
+  if(!state.aiChat[cid]) state.aiChat[cid] = [];
+  var prior = state.aiChat[cid].slice(-8).map(function(m){ return { role: m.role==='user'?'user':'model', text: m.text }; });
+  state.aiChat[cid].push({ role:'user', text: draft });
+  if(state.aiChatDraft) state.aiChatDraft[cid] = '';
+  render();
   var st = document.getElementById('ai-status');
-  var btn = document.getElementById('ai-run-btn');
-  if (st) st.textContent = '🤖 기록을 읽고 정리하는 중... (10~20초)';
-  if (btn) btn.disabled = true;
+  var sendBtn = document.getElementById('aichat-send');
+  if(st) st.textContent = '🤖 생각하는 중...';
+  if(sendBtn) sendBtn.disabled = true;
   try {
     var recordText = buildAdviseText(c);
     var cfg = getSbConfig();
     var token = getAccessToken() || cfg.key;
     var res = await fetch(cfg.url + '/functions/v1/advise-customer', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'apikey': cfg.key, 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ recordText: recordText })
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'apikey': cfg.key, 'Authorization':'Bearer ' + token },
+      body: JSON.stringify({ recordText: recordText, question: draft, history: prior })
     });
-    if (res.status === 404) { if (st) st.textContent = 'ℹ️ AI 비서가 아직 서버에 배포되지 않았어요 (advise-customer 함수 필요).'; return; }
-    if (res.status === 429) { if (st) st.textContent = '⏳ 잠시 요청이 많아요(무료 한도). 1~2분 뒤 다시 시도해주세요.'; return; }
-    if (!res.ok) { if (st) st.textContent = '⚠️ 분석 실패 (' + res.status + '). 잠시 후 다시 시도해주세요.'; return; }
+    if(res.status===404){ if(st) st.textContent='ℹ️ AI 비서가 아직 서버에 배포되지 않았어요 (advise-customer 함수 필요).'; return; }
+    if(res.status===429){ if(st) st.textContent='⏳ 요청이 몰렸어요(무료 한도). 1~2분 뒤 다시 시도해주세요.'; return; }
+    if(!res.ok){ if(st) st.textContent='⚠️ 응답 실패 (' + res.status + '). 잠시 후 다시 시도해주세요.'; return; }
     var j = await res.json();
-    if (j.error) { if (st) st.textContent = '⚠️ ' + j.error; return; }
-    c.aiSummary = j.summary || '';
-    c.aiActions = Array.isArray(j.actions) ? j.actions : [];
-    c.aiSummaryAt = today();
-    c.aiSummaryTouch = lastTouchDate(c) || '';
+    if(j.error){ if(st) st.textContent='⚠️ ' + j.error; return; }
+    var answer = j.answer || j.summary || '';
+    if(!answer){ if(st) st.textContent='⚠️ 빈 응답이에요. 다시 시도해주세요.'; return; }
+    state.aiChat[cid].push({ role:'ai', text: answer });
+    if(st) st.textContent='';
     render();
-    persistAll('🤖 AI 정리·조언 완료');
+    setTimeout(function(){ var lg=document.getElementById('aichat-log'); if(lg) lg.scrollTop=lg.scrollHeight; }, 30);
   } catch(e) {
-    if (st) st.textContent = '⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패');
+    if(st) st.textContent='⚠️ 오류: ' + (e && e.message ? e.message : '처리 실패');
   } finally {
-    if (btn) btn.disabled = false;
+    if(sendBtn) sendBtn.disabled = false;
   }
 }
 
@@ -3977,7 +4022,7 @@ function render() {
       <select style="padding:4px 7px;font-size:11px;border:1px solid var(--border2);border-radius:6px;background:var(--bg3);color:var(--text);cursor:pointer;font-family:inherit;"
         onchange="state.sortBy=this.value;render()">
         <option value="registered"${state.sortBy==='registered'?' selected':''}>접수일</option>
-        <option value="grade"${state.sortBy==='grade'?' selected':''}>등급</option>
+        <option value="score"${state.sortBy==='score'?' selected':''}>점수</option>
         <option value="name"${state.sortBy==='name'?' selected':''}>이름</option>
       </select>
       <button onclick="state.sortDir=state.sortDir==='asc'?'desc':'asc';render()"
@@ -4279,7 +4324,7 @@ function render() {
       const cStatus2 = sel.status || 'received';
       tabBody = `
         ${alertHtml}
-        ${aiPanelHtml(sel)}
+        ${aiChatPanelHtml(sel)}
         <div class="info-grid">
           <div class="info-card"><div class="info-lbl">유형</div><div class="info-val"><span class="tag ${TYPE_CLASS[sel.type]||''}">${TYPE_LABEL[sel.type]||sel.type}</span></div></div>
           <div class="info-card"><div class="info-lbl">등급</div><div class="info-val"><span class="grade-badge grade-${sel.grade}" style="display:inline-flex;width:28px;height:28px;font-size:12px">${sel.grade}</span>${gradeTitle(sel.grade)?` <span style="font-size:12px;color:var(--text2)">${gradeTitle(sel.grade)}</span>`:''}</div></div>

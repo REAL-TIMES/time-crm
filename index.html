@@ -1706,7 +1706,7 @@ let state = {
   selectedId: null,
   editData: null,
   filterGrade: 'all',
-  filterType: 'all',
+  filterTypes: [],
   filterStatus: 'all',
   filterPropMain: 'all',
   filterPropSub: 'all',
@@ -2329,8 +2329,13 @@ function filtered() {
     // 등급 필터 ← 이게 빠져있었음
     if (state.filterGrade !== 'all' && c.grade !== state.filterGrade) return false;
     // 유형 필터
-    if (state.filterType === 'listing') { if (c.type!=='seller' && c.type!=='landlord' && c.type!=='potential') return false; }
-    else if (state.filterType !== 'all' && c.type !== state.filterType) return false;
+    if (state.filterTypes && state.filterTypes.length) {
+      var _ft = state.filterTypes;
+      var _ok = false;
+      if (_ft.indexOf('listing') >= 0 && (c.type==='seller'||c.type==='landlord'||c.type==='potential')) _ok = true;
+      if (!_ok && _ft.indexOf(c.type) >= 0) _ok = true;
+      if (!_ok) return false;
+    }
     // 매물 유형 필터
     if (state.filterPropMain !== 'all' && (c.propMain||'') !== state.filterPropMain) return false;
     if (state.filterPropSub  !== 'all' && (c.propSub||'')  !== state.filterPropSub)  return false;
@@ -3617,12 +3622,19 @@ function searchClear() {
 }
 
 // 대시보드 → 목록 이동(필터 초기화 후 단일 필터 적용)
+function toggleFilterType(k) {
+  if (!Array.isArray(state.filterTypes)) state.filterTypes = [];
+  var i = state.filterTypes.indexOf(k);
+  if (i >= 0) state.filterTypes.splice(i, 1);
+  else state.filterTypes.push(k);
+}
+// 대시보드 → 목록 이동(필터 초기화 후 단일 필터 적용)
 function dbResetFilters() {
-  state.filterGrade='all'; state.filterType='all'; state.filterStatus='all'; state.filterPropMain='all'; state.filterPropSub='all'; state.search='';
+  state.filterGrade='all'; state.filterTypes=[]; state.filterStatus='all'; state.filterPropMain='all'; state.filterPropSub='all'; state.search='';
 }
 function dbGoAll(){ dbResetFilters(); state.view='list'; render(); }
 function dbGoGrade(g){ dbResetFilters(); state.filterGrade=g; state.view='list'; render(); }
-function dbGoType(t){ dbResetFilters(); state.filterType=t; state.view='list'; render(); }
+function dbGoType(t){ dbResetFilters(); state.filterTypes=[t]; state.view='list'; render(); }
 function dbGoStatus(st){ dbResetFilters(); state.filterStatus=st; state.view='list'; render(); }
 
 function statusFilterLabel(k){
@@ -3990,12 +4002,14 @@ function render() {
 
   // 고객 유형 (버튼)
   const _tc = (k)=> k==='all' ? _nd.length : _nd.filter(x=>x.type===k).length;
-  html += `<div class="sb-section"><div class="sb-section-title">고객 유형</div><div class="sb-stats sb-stats-wide">`;
-  [{k:'all',lbl:'전체'},{k:'buyer',lbl:'매수'},{k:'seller',lbl:'매도'},{k:'tenant',lbl:'임차'},{k:'landlord',lbl:'임대'},{k:'potential',lbl:'잠재'},{k:'partner_agency',lbl:'협력부동산'},{k:'partner_dev',lbl:'분양대행'},{k:'partner_build',lbl:'시행·시공'},{k:'partner_finance',lbl:'금융·법무'}].forEach(t=>{
-    html += `<div class="sb-stat${state.filterType===t.k?' active':''}" onclick="setListFilter(function(){state.filterType=state.filterType==='${t.k}'?'all':'${t.k}';})"><span class="l">${t.lbl}</span><span class="n">${_tc(t.k)}</span></div>`;
+  const _typeOn = (k)=> (state.filterTypes||[]).indexOf(k) >= 0;
+  html += `<div class="sb-section"><div class="sb-section-title">고객 유형 <span style="font-weight:400;color:rgba(255,255,255,0.3)">(중복선택)</span></div><div class="sb-stats sb-stats-wide">`;
+  html += `<div class="sb-stat${(state.filterTypes||[]).length===0?' active':''}" onclick="setListFilter(function(){state.filterTypes=[];})"><span class="l">전체</span><span class="n">${_nd.length}</span></div>`;
+  [{k:'buyer',lbl:'매수'},{k:'seller',lbl:'매도'},{k:'tenant',lbl:'임차'},{k:'landlord',lbl:'임대'},{k:'potential',lbl:'잠재'},{k:'partner_agency',lbl:'협력부동산'},{k:'partner_dev',lbl:'분양대행'},{k:'partner_build',lbl:'시행·시공'},{k:'partner_finance',lbl:'금융·법무'}].forEach(t=>{
+    html += `<div class="sb-stat${_typeOn(t.k)?' active':''}" onclick="setListFilter(function(){toggleFilterType('${t.k}');})"><span class="l">${t.lbl}</span><span class="n">${_tc(t.k)}</span></div>`;
   });
   var _listingN = _nd.filter(function(x){ return x.type==='seller'||x.type==='landlord'||x.type==='potential'; }).length;
-  html += `<div class="sb-stat${state.filterType==='listing'?' active':''}" style="grid-column:1/-1;background:rgba(201,169,110,0.12)" onclick="setListFilter(function(){state.filterType=state.filterType==='listing'?'all':'listing';})"><span class="l">📋 매물의뢰 (매도·임대·잠재)</span><span class="n">${_listingN}</span></div>`;
+  html += `<div class="sb-stat${_typeOn('listing')?' active':''}" style="grid-column:1/-1;background:rgba(201,169,110,0.12)" onclick="setListFilter(function(){toggleFilterType('listing');})"><span class="l">📋 매물의뢰 (매도·임대·잠재)</span><span class="n">${_listingN}</span></div>`;
   html += `</div></div>`;
 
   // 매물 유형 칩

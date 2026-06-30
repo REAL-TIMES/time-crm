@@ -3649,7 +3649,10 @@ function filterChip(label, clearJS){
 function filterBarHtml(){
   var chips = [];
   if (state.filterGrade !== 'all')    chips.push(filterChip(state.filterGrade + '등급', "state.filterGrade='all'"));
-  if (state.filterType !== 'all')     chips.push(filterChip(state.filterType==='listing' ? '매물의뢰' : (TYPE_LABEL[state.filterType] || state.filterType), "state.filterType='all'"));
+  (state.filterTypes||[]).forEach(function(ft){
+    var _lbl = ft==='listing' ? '매물의뢰' : (TYPE_LABEL[ft] || ft);
+    chips.push(filterChip(_lbl, "toggleFilterType('"+ft+"')"));
+  });
   if (state.filterStatus !== 'all')   chips.push(filterChip(statusFilterLabel(state.filterStatus), "state.filterStatus='all'"));
   if (state.filterPropMain !== 'all') chips.push(filterChip(propMainLabel(state.filterPropMain), "state.filterPropMain='all'"));
   if (state.filterPropSub !== 'all')  chips.push(filterChip(state.filterPropSub, "state.filterPropSub='all'"));
